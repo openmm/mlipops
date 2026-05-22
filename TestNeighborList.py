@@ -6,13 +6,13 @@ from neighborlist import NeighborList
 
 def apply_pbc(delta, box_vectors):
     if box_vectors is not None:
-        scale = torch.round(delta[2]/box_vectors[2,2])
-        delta -= scale*box_vectors[2]
-        scale = torch.round(delta[1]/box_vectors[1,1])
-        delta -= scale*box_vectors[1]
-        scale = torch.round(delta[0]/box_vectors[0,0])
-        delta -= scale*box_vectors[0]
-    distance = torch.linalg.norm(delta)
+        scale = torch.round(delta[:, 2]/box_vectors[2,2])
+        delta -= scale.reshape((-1,1))*box_vectors[2].reshape((1,3))
+        scale = torch.round(delta[:, 1]/box_vectors[1,1])
+        delta -= scale.reshape((-1,1))*box_vectors[1].reshape((1,3))
+        scale = torch.round(delta[:, 0]/box_vectors[0,0])
+        delta -= scale.reshape((-1,1))*box_vectors[0].reshape((1,3))
+    distance = torch.linalg.norm(delta, dim=-1)
     return distance
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -21,7 +21,7 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
     """Test that neighbor lists are computed correctly."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
-    num_particles = 500
+    num_particles = 200 if device == 'cpu' else 1100
     positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
     if periodic:
         box_vectors = torch.tensor([[2.0, 0.0, 0.0],
@@ -41,23 +41,20 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
         j = neighbors[index, 1]
         if not include_self:
             assert i != j
-        distance = apply_pbc(positions[i]-positions[j], box_vectors)
+        distance = apply_pbc((positions[i]-positions[j]).reshape((1,3)), box_vectors)
         assert distance <= cutoff
 
     # Check that the right number of neighbors was found.
 
     found = set(tuple(pair) for pair in neighbors)
     num_expected = 0
-    for i in range(num_particles):
-        for j in range(num_particles):
-            if not include_symmetric and i > j:
-                continue
-            if not include_self and i == j:
-                continue
-            distance = apply_pbc(positions[i]-positions[j], box_vectors)
-            if distance < cutoff:
-                assert (i, j) in found or (j, i) in found
-                num_expected += 1
+    index = torch.combinations(torch.arange(num_particles, device=device), with_replacement=include_self)
+    pos = positions[index]
+    distance = apply_pbc(pos[:,0]-pos[:,1], box_vectors)
+    mask = (distance < cutoff).to(torch.int32)
+    if include_symmetric:
+        mask *= torch.where(index[:,0] != index[:,1], 2, 1)
+    num_expected = torch.sum(mask)
     assert num_expected == len(found)
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -65,7 +62,7 @@ def test_compile_and_pickle(device):
     """Test that NeighborList can be compiled and pickled."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
-    num_particles = 100
+    num_particles = 200 if device == 'cpu' else 1200
     positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
     neighbor_list = NeighborList(1.0, False, False, device=device)
 
