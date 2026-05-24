@@ -1,10 +1,9 @@
 import torch
 import pickle
 import pytest
-import numpy as np
 from neighborlist import NeighborList
 
-def apply_pbc(delta, box_vectors):
+def compute_distances(delta, box_vectors):
     if box_vectors is not None:
         scale = torch.round(delta[:, 2]/box_vectors[2,2])
         delta -= scale.reshape((-1,1))*box_vectors[2].reshape((1,3))
@@ -41,7 +40,7 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
         j = neighbors[index, 1]
         if not include_self:
             assert i != j
-        distance = apply_pbc((positions[i]-positions[j]).reshape((1,3)), box_vectors)
+        distance = compute_distances((positions[i]-positions[j]).reshape((1,3)), box_vectors)
         assert distance <= cutoff
 
     # Check that the right number of neighbors was found.
@@ -50,7 +49,7 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
     num_expected = 0
     index = torch.combinations(torch.arange(num_particles, device=device), with_replacement=include_self)
     pos = positions[index]
-    distance = apply_pbc(pos[:,0]-pos[:,1], box_vectors)
+    distance = compute_distances(pos[:,0]-pos[:,1], box_vectors)
     mask = (distance < cutoff).to(torch.int32)
     if include_symmetric:
         mask *= torch.where(index[:,0] != index[:,1], 2, 1)
