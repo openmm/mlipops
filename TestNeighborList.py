@@ -30,14 +30,17 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
         box_vectors = None
     cutoff = 0.2
     neighbor_list = NeighborList(cutoff, include_self, include_symmetric, device=device)
+    assert neighbor_list.cutoff == cutoff
+    assert neighbor_list.include_self == include_self
+    assert neighbor_list.include_symmetric == include_symmetric
     neighbors = neighbor_list(positions, box_vectors)
     neighbors = neighbors.detach().cpu().numpy()
 
     # Check that all the returned neighbors are correct.
 
-    for index in range(neighbors.shape[1]):
-        i = neighbors[index, 0]
-        j = neighbors[index, 1]
+    for index in range(neighbors.shape[0]):
+        i = int(neighbors[index, 0])
+        j = int(neighbors[index, 1])
         if not include_self:
             assert i != j
         distance = compute_distances((positions[i]-positions[j]).reshape((1,3)), box_vectors)
@@ -55,6 +58,36 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
         mask *= torch.where(index[:,0] != index[:,1], 2, 1)
     num_expected = torch.sum(mask)
     assert num_expected == len(found)
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('include_self', [True, False])
+@pytest.mark.parametrize('include_symmetric', [True, False])
+def test_no_cutoff(device, include_self, include_symmetric):
+    """Test a neighbor list that does not use a cutoff."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_particles = 100
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    neighbor_list = NeighborList(None, include_self, include_symmetric, device=device)
+    neighbors = neighbor_list(positions, None)
+    if include_self:
+        if include_symmetric:
+            assert neighbors.shape[0] == num_particles*num_particles
+        else:
+            assert neighbors.shape[0] == (num_particles+1)*num_particles//2
+    else:
+        if include_symmetric:
+            assert neighbors.shape[0] == num_particles*(num_particles-1)
+        else:
+            assert neighbors.shape[0] == (num_particles-1)*num_particles//2
+    for index in range(neighbors.shape[0]):
+        i = int(neighbors[index, 0])
+        j = int(neighbors[index, 1])
+        if not include_self:
+            assert i != j
+        if not include_symmetric:
+            assert i <= j
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):

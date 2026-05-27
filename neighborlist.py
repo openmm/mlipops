@@ -8,16 +8,55 @@ except ImportError:
 
 
 class NeighborList(torch.nn.Module):
-    def __init__(self, cutoff: float, include_self: bool = False, include_symmetric: bool = False, device: str = 'cpu'):
+    def __init__(self, cutoff: float | None = None, include_self: bool = False, include_symmetric: bool = False, device: str = 'cpu'):
         super().__init__()
-        self.cutoff = cutoff
-        self.include_self = include_self
-        self.include_symmetric = include_symmetric
+        self._cutoff = cutoff
+        self._include_self = include_self
+        self._include_symmetric = include_symmetric
         self.device = device
         self.use_triton = has_triton and torch.device(device).type == 'cuda'
         self._max_neighbors = 10000
+        self._prev_pairs = None
+        self._prev_num_particles = None
+        self._prev_positions = None
+
+    @property
+    def cutoff(self):
+        return self._cutoff
+
+    @property
+    def include_self(self):
+        return self._include_self
+
+    @property
+    def include_symmetric(self):
+        return self._include_symmetric
 
     def forward(self, positions: torch.Tensor, box_vectors: torch.Tensor | None):
+        if self._cutoff is None:
+            # Since we're returning all possible pairs, it mostly doesn't change from one call to the next.
+            # We can just return the same value every time.  The one thing we need to check for is that the
+            # number of particles hasn't changed.
+
+            num_particles = positions.shape[0]
+            if self._prev_pairs is None or num_particles != self._prev_num_particles:
+                i = torch.arange(num_particles, device=positions.device)
+                if self._include_self:
+                    if self._include_symmetric:
+                        self._prev_pairs = torch.cartesian_prod(i, i)
+                    else:
+                        self._prev_pairs = torch.combinations(i, with_replacement=True)
+                else:
+                    if self._include_symmetric:
+                        pairs = torch.combinations(i)
+                        self._prev_pairs = torch.cat([pairs, pairs.flip(1)])
+                    else:
+                        self._prev_pairs = torch.combinations(i)
+                self._prev_num_particles = num_particles
+            return self._prev_pairs
+
+        # Compute a new list of pairs.
+
         if self.use_triton and positions.shape[0] > 1000:
             result = self.compute_large(positions, box_vectors)
             if result is None:
@@ -42,13 +81,13 @@ class NeighborList(torch.nn.Module):
 
         # Create a mask for which pairs to return.
 
-        mask = distance < self.cutoff
-        if not self.include_symmetric:
-            if self.include_self:
+        mask = distance < self._cutoff
+        if not self._include_symmetric:
+            if self._include_self:
                 mask = mask.triu()
             else:
                 mask = mask.triu(1)
-        elif not self.include_self:
+        elif not self._include_self:
             mask.fill_diagonal_(False)
 
         # Build a matrix of indices and return the results.
@@ -62,7 +101,7 @@ class NeighborList(torch.nn.Module):
         # Sort the particles in a way that groups nearby particles together.
 
         num_particles = positions.shape[0]
-        bin_size = 0.2*self.cutoff
+        bin_size = 0.2*self._cutoff
         grid_size = ((positions.max(dim=0)[0]-positions.min(dim=0)[0])/bin_size).ceil().to(torch.int32)+3
         keys = torch.empty((num_particles,), dtype=torch.int32, device=self.device)
         g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
@@ -100,8 +139,8 @@ class NeighborList(torch.nn.Module):
         n = block_positions.shape[0]
         i = torch.arange(n, device=self.device)
         indices = torch.cat((i.view((-1, 1, 1)).expand((n, n, 1)), i.view((1, -1, 1)).expand((n, n, 1))), axis=2)
-        mask = block_distance < self.cutoff
-        if not self.include_symmetric:
+        mask = block_distance < self._cutoff
+        if not self._include_symmetric:
             mask = mask.triu()
         block_pairs = indices[mask]
 
@@ -111,7 +150,7 @@ class NeighborList(torch.nn.Module):
         output_counter = torch.zeros((1,), dtype=torch.int32, device=self.device)
         g = lambda meta: (meta['num_block_pairs'],)
         find_neighbors_kernel[g](output, output_counter, block_pairs, block_particles, block_positions, box_vectors,
-                                block_pairs.shape[0], output.shape[0], num_particles, self.cutoff**2, self.include_self, self.include_symmetric)
+                                block_pairs.shape[0], output.shape[0], num_particles, self._cutoff**2, self._include_self, self._include_symmetric)
         if output_counter > self._max_neighbors:
             # Too many neighbors were found to fit in the output tensor.  Increase the output
             # size and try again. 
