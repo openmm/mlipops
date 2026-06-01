@@ -1,7 +1,7 @@
 import torch
+import pickle
 import pytest
-from neighborlist import NeighborList
-from coulombpme import CoulombPME
+from mlipops import NeighborList, CoulombPME
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_rectangular(device):
@@ -246,3 +246,28 @@ def test_double_derivative(device):
         torch.autograd.grad(ddir, charges, retain_graph=True)
     with pytest.raises(Exception):
         torch.autograd.grad(drecip, charges, retain_graph=True)
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+def test_compile_and_pickle(device):
+    """Test that CoulombPME can be compiled and pickled."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    positions = 3*torch.rand((9, 3), dtype=torch.float32, device=device)-1
+    charges = torch.tensor([(i-4)*0.1 for i in range(9)], dtype=torch.float32, device=device)
+    box_vectors = torch.tensor([[1, 0, 0], [0,1.1, 0], [0, 0, 1.2]], dtype=torch.float32, device=device)
+    neighbor_list = NeighborList(device=device)
+    pme = CoulombPME(neighbor_list, None, 14, 16, 15, 5, 5.0, 138.935, device=device)
+
+    # Check that torch.compile works correctly.
+
+    compiled = torch.compile(pme)
+    energy1 = pme(positions, charges, box_vectors)
+    energy2 = compiled(positions, charges, box_vectors)
+    assert torch.allclose(energy1, energy2)
+
+    # Check that pickle works correctly.
+
+    pickled = pickle.dumps(pme)
+    pme2 = pickle.loads(pickled)
+    energy3 = pme2(positions, charges, box_vectors)
+    assert torch.allclose(energy1, energy3)

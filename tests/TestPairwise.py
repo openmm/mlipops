@@ -2,8 +2,7 @@ import torch
 import pickle
 import pytest
 import random
-from neighborlist import NeighborList
-from pairwise import Pairwise
+from mlipops import NeighborList, Pairwise
 
 def compute_distances(delta, box_vectors):
     if box_vectors is not None:

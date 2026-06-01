@@ -1,7 +1,7 @@
 import torch
 import pickle
 import pytest
-from neighborlist import NeighborList
+from mlipops import NeighborList
 
 def compute_distances(delta, box_vectors):
     if box_vectors is not None:

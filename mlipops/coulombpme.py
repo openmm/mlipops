@@ -1,8 +1,8 @@
 import torch
 import math
-import coulomb
-from neighborlist import NeighborList
-from pairwise import Pairwise
+from . import coulomb
+from .neighborlist import NeighborList
+from .pairwise import Pairwise
 try:
     import triton
     from pme_triton import spread_charge_kernel, interp_derivatives_kernel
