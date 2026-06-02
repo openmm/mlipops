@@ -12,8 +12,69 @@ except ImportError:
 
 
 class CoulombPME(torch.nn.Module):
+    """Compute Coulomb interactions using the Particle Mesh Ewald method.
+
+    This class computes the energy of an infinite set of charges repeating periodically through space.  The interaction
+    is divided into a short range part, which is computed in direct space, and a long range part, which is computed
+    in reciprocal space.  The division between the two is set by a parameter `alpha`, which can be adjusted to
+    minimize the total cost of computing both parts.
+
+    You can optionally specify that certain interactions should be omitted when computing the energy.  This is typically
+    used for nearby atoms within the same molecule.  When two atoms are listed as an exclusion, only the interaction of
+    each with the same periodic copy of the other (that is, not applying periodic boundary conditions) is excluded.
+    Each atom still interacts with all the periodic copies of the other.
+
+    Due to the way the reciprocal space term is calculated, it is impossible to prevent it from including excluded
+    interactions.  The direct space term therefore compensates for it, subtracting off the energy that was incorrectly
+    included in reciprocal space.  The sum of the two terms thus yields the correct energy with the interaction fully
+    excluded.
+
+    When performing backpropagation, this class computes derivatives with respect to atomic positions and charges, but
+    not to any other parameters (box vectors, alpha, etc.).  In addition, it only computes first derivatives.
+    Attempting to compute a second derivative will throw an exception.  This means that if you use PME during training,
+    the loss function can only depend on energy, not forces.
+
+    When you create an instance of this class, you must specify the value of Coulomb's constant 1/(4*pi*eps0).  Its
+    value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  Here are
+    the values for some common units.
+
+    kJ/mol, nm: 138.935457
+    kJ/mol, A: 1389.35457
+    kcal/mol, nm: 33.2063713
+    kcal/mol, A: 332.063713
+    eV, nm: 1.43996454
+    eV, A: 14.3996454
+    hartree, bohr: 1.0
+    """
     def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor, gridx: int, gridy: int, gridz: int,
-                 order: int, alpha: float, prefactor: float, cutoff: float | None = None, device: str = 'cpu'):
+                 order: int, alpha: float, prefactor: float, cutoff: float | None = None):
+        """Create on object for computing Coulomb interactions.
+
+        Parameters
+        ----------
+        neighbor_list: NeighborList
+            the NeighborList used to identify direct space interactions.  It determines the direct space cutoff
+            distance, the device to run on, and whether padding is used to enable caching of neighbors.
+        exclusions: torch.Tensor
+            a tensor of shape (n_exclusions, 2).  Each row contains the indices of two particles whose interaction
+            should be omitted.
+        gridx: int
+            the size of the charge grid along the x axis
+        gridy: int
+            the size of the charge grid along the y axis
+        gridz: int
+            the size of the charge grid along the z axis
+        order: int
+            the B-spline order to use for charge spreading
+        alpha: float
+            the coefficient of the erf() function used to separate the energy into direct and reciprocal space terms
+        prefactor: float
+            Coulomb's constant 1/(4*pi*eps0).  This sets the unit system.
+        cutoff: float | None
+            the cutoff distance used when computing direct space interactions.  If None, the NeighborList's cutoff
+            is used.  This argument is useful when a single NeighborList is shared by multiple interactions that use
+            different cutoffs.  The value may never be greater than the NeighborList's cutoff.
+        """
         if neighbor_list.include_self or neighbor_list.include_symmetric:
             raise ValueError('The neighbor list for Coulomb should not include self interactions or symmetric interactions')
         if gridx <= order or gridy <= order or gridz <= order:
@@ -25,8 +86,9 @@ class CoulombPME(torch.nn.Module):
         if prefactor <= 0:
             raise ValueError('prefactor must be positive')
         if cutoff is not None and cutoff > neighbor_list.cutoff:
-            raise ValueError("The cutoff cannot be larger than the neighbor list's cutoff")
+            raise ValueError("The cutoff cannot be larger than the NeighborList's cutoff")
         super().__init__()
+        device = neighbor_list.device
         self.neighbor_list = neighbor_list
         self.register_buffer('exclusions', exclusions)
         self.gridx = gridx
@@ -82,12 +144,32 @@ class CoulombPME(torch.nn.Module):
 
     def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor, include_direct: bool = True,
                 include_reciprocal: bool = True):
+        """Compute the interaction.
+
+        Parameters
+        ----------
+        positions: torch.Tensor
+            a Tensor of shape (n_particles, 3) containing the cartesian coordinates of each particle
+        charges:
+            a Tensor of shape (n_particles,) containing the charge of each particle
+        box_vectors: torch.Tensor | None
+            a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
+            conditions are not used.
+        include_direct: bool
+            specifies whether the direct space term should be included in the result
+        include_reciprocal: bool
+            specifies whether the reciprocal space term should be included in the result
+
+        Returns
+        -------
+        a torch.Tensor containing the energy of the interaction
+        """
         energy = torch.zeros((1,), dtype=torch.float32, device=positions.device)
         if include_direct:
             neighbors = self.neighbor_list(positions, box_vectors)
-            energy += self.direct(positions, charges.unsqueeze(1), neighbors, box_vectors)
+            energy += self.direct(positions, charges, neighbors, box_vectors)
             if self.exclusions is not None:
-                energy -= self.exclusion_correction(positions, charges.unsqueeze(1), self.exclusions, None)
+                energy -= self.exclusion_correction(positions, charges, self.exclusions, None)
         if include_reciprocal:
             volume = box_vectors.diag().prod()
             energy -= torch.sum(charges**2)*self.alpha/math.sqrt(torch.pi)
@@ -97,6 +179,9 @@ class CoulombPME(torch.nn.Module):
 
 
 class ReciprocalFunction(torch.autograd.Function):
+    """Compute the forward and backward passes of the reciprocal space interaction.  When possible, this uses Triton
+    kernels to make the calculation faster.
+    """
     @staticmethod
     def forward(ctx, pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor):
         device = pme.xmoduli.device

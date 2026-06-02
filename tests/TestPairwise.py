@@ -15,8 +15,8 @@ def compute_distances(delta, box_vectors):
     distance = torch.linalg.norm(delta, dim=-1)
     return distance
 
-def coulomb(pairs, distance, parameters):
-    return parameters[:,0,0]*parameters[:,1,0]/distance
+def coulomb(pairs, r, params):
+    return params[pairs[:,0]]*params[pairs[:,1]]/r
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('periodic', [True, False])
@@ -27,7 +27,7 @@ def test_coulomb(device, periodic):
     num_particles = 200
     positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
     positions.requires_grad_()
-    charges = 2.0*torch.rand((num_particles,1), dtype=torch.float32, device=device)-1.0
+    charges = 2.0*torch.rand(num_particles, dtype=torch.float32, device=device)-1.0
     charges.requires_grad_()
     if periodic:
         box_vectors = torch.tensor([[2.0, 0.0, 0.0],
@@ -49,7 +49,7 @@ def test_coulomb(device, periodic):
     mask = (distance < cutoff).to(torch.int32)
     positions.grad.zero_()
     charges.grad.zero_()
-    expected_energy = torch.sum(mask*coulomb(pairs, distance, charges[index]))
+    expected_energy = torch.sum(mask*coulomb(index, distance, charges))
     expected_energy.backward()
     assert torch.allclose(expected_energy, energy, rtol=1e-4)
     assert torch.allclose(-positions.grad, forces, rtol=1e-4)
@@ -62,7 +62,7 @@ def test_exclusions(device):
         pytest.skip('No GPU')
     num_particles = 200
     positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
-    charges = 2.0*torch.rand((num_particles,1), dtype=torch.float32, device=device)-1.0
+    charges = 2.0*torch.rand(num_particles, dtype=torch.float32, device=device)-1.0
     cutoff = 0.4
     neighbor_list = NeighborList(cutoff, device=device)
     pairs = neighbor_list(positions, None)
@@ -77,7 +77,7 @@ def test_exclusions(device):
         for j in range(i):
             distance = compute_distances(positions[i]-positions[j], None)
             if distance < cutoff and (i, j) not in exclusion_set and (j, i) not in exclusion_set:
-                expected_energy += coulomb(None, distance, torch.stack([charges[i], charges[j]]).unsqueeze(0))
+                expected_energy += coulomb(torch.tensor([[i,j]], device=device), distance, charges)
     assert torch.allclose(expected_energy, energy, rtol=1e-4)
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -87,7 +87,7 @@ def test_compile_and_pickle(device):
         pytest.skip('No GPU')
     num_particles = 200
     positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
-    charges = 2.0*torch.rand((num_particles,1), dtype=torch.float32, device=device)-1.0
+    charges = 2.0*torch.rand(num_particles, dtype=torch.float32, device=device)-1.0
     cutoff = 0.4
     neighbor_list = NeighborList(cutoff, device=device)
     pairs = neighbor_list(positions, None)

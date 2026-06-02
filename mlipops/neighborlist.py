@@ -8,8 +8,42 @@ except ImportError:
 
 
 class NeighborList(torch.nn.Module):
+    """Identifies neighboring particles that can interact with each other.
+
+    Neighbors are usually defined by a distance cutoff: any pairs that are closer than the cutoff, possibly taking
+    periodic boundary conditions into account, can interact and therefore are returned.  It is also possible to
+    omit the cutoff, in which case all pairs are returned regardless of distance.
+
+    Two additional options further restrict the result.  `include_self` determines whether a self interaction pair
+    (i, i) should be included for each particle.  `include_symmetric` whether the result should include both of the
+    symmetric pairs (i, j) and (j, i), or whether only one should be included.
+
+    You can optionally specify a padding value, in which case all pairs that are within the distance cutoff+padding
+    are returned.  This allows saving computation be reusing cached results.  If you call the neighbor list again
+    and no particle has moved by more than half the padding distance, the previous result can be returned.  The
+    disadvantage is that more pairs need to be included in the neighbor list.  This option is generally useful only
+    when the cost of finding neighbors is large compared to the cost of computing interactions based on them.
+    """
     def __init__(self, cutoff: float | None = None, include_self: bool = False, include_symmetric: bool = False,
                  padding: float | None = None, device: str = 'cpu'):
+        """Create a NeighborList for identifying neighbors.
+
+        Parameters
+        ----------
+        cutoff: float | None
+            the cutoff distance to use when identifying neighbors.  If None, all pairs are returned regardless
+            of distance.
+        include_self: bool
+            if True, include self interaction pairs of the form (i, i).
+        include_symmetric: bool
+            if True, include both of the symmetric pairs (i, j) and (j, i) for particles i and j.  If False, only
+            one of the two is included.
+        padding: float | None
+            the padding distance to add to the cutoff, allowing cached results to be reused.  If None, caching
+            is disabled.
+        device: str
+            the PyTorch device to perform calculation on.
+        """
         super().__init__()
         self._cutoff = cutoff
         self._include_self = include_self
@@ -39,6 +73,20 @@ class NeighborList(torch.nn.Module):
         return self._padding
 
     def forward(self, positions: torch.Tensor, box_vectors: torch.Tensor | None):
+        """Compute the neighbor list.
+
+        Parameters
+        ----------
+        positions: torch.Tensor
+            a Tensor of shape (particles, 3) containing the cartesian coordinates of each particle
+        box_vectors: torch.Tensor | None
+            a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
+            conditions are not used.
+
+        Returns
+        -------
+        a Tensor of shape (pairs, 2).  Each row contains the indices of two particles that can interact.
+        """
         if self._cutoff is None:
             # Since we're returning all possible pairs, it mostly doesn't change from one call to the next.
             # We can just return the same value every time.  The one thing we need to check for is that the
@@ -75,12 +123,12 @@ class NeighborList(torch.nn.Module):
         if self._padding is not None:
             cutoff += self._padding
         if self.use_triton and positions.shape[0] > 1000:
-            result = self.compute_large(positions, box_vectors, cutoff)
+            result = self._compute_large(positions, box_vectors, cutoff)
             if result is None:
                 # Try again with a larger output buffer.
 
-                result = self.compute_large(positions, box_vectors, cutoff)
-        result = self.compute_small(positions, box_vectors, cutoff)
+                result = self._compute_large(positions, box_vectors, cutoff)
+        result = self._compute_small(positions, box_vectors, cutoff)
 
         # Cache the result for future use.
 
@@ -89,7 +137,10 @@ class NeighborList(torch.nn.Module):
             self._prev_pairs = result
         return result
 
-    def compute_small(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float):
+    def _compute_small(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float):
+        """This implements a brute force algorithm to identify neighbors by testing all possible pairs.  It is
+        fast for small numbers of particles but scales as O(n^2), making it less suitable for larger systems.
+        """
         # Build matrices of deltas and distances.
 
         delta = positions.view((-1,1,3)) - positions
@@ -120,7 +171,11 @@ class NeighborList(torch.nn.Module):
         indices = torch.cat((i.view((-1, 1, 1)).expand((n, n, 1)), i.view((1, -1, 1)).expand((n, n, 1))), axis=2)
         return indices[mask]
 
-    def compute_large(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float):
+    def _compute_large(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float):
+        """This implements a more complex algorithm for identifying neighbors.  On small systems it is slower than
+        _compute_small(), but it becomes much faster as the number of particles grows.  It requires Triton, and
+        therefore is only used on GPUs.
+        """
         # Sort the particles in a way that groups nearby particles together.
 
         num_particles = positions.shape[0]

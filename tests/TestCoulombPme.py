@@ -10,7 +10,7 @@ def test_rectangular(device):
         pytest.skip('No GPU')
     cutoff = 0.5
     neighbor_list = NeighborList(cutoff, device=device)
-    pme = CoulombPME(neighbor_list, None, 14, 15, 16, 5, 4.985823141035867, 138.935, cutoff, device)
+    pme = CoulombPME(neighbor_list, None, 14, 15, 16, 5, 4.985823141035867, 138.935, cutoff)
     pos = [[0.7713206433, 0.02075194936, 0.6336482349],
            [0.7488038825, 0.4985070123, 0.2247966455],
            [0.1980628648, 0.7605307122, 0.1691108366],
@@ -63,7 +63,7 @@ def test_triclinic(device):
         pytest.skip('No GPU')
     cutoff = 0.5
     neighbor_list = NeighborList(cutoff, device=device)
-    pme = CoulombPME(neighbor_list, None, 14, 16, 15, 5, 5.0, 138.935, cutoff, device)
+    pme = CoulombPME(neighbor_list, None, 14, 16, 15, 5, 5.0, 138.935, cutoff)
     pos = [[1.31396193, -0.9377441519, 0.9009447048],
            [1.246411648, 0.4955210369, -0.3256100634],
            [-0.4058114057, 1.281592137, -0.4926674903],
@@ -130,7 +130,7 @@ def test_exclusions(device):
     box_vectors = torch.tensor([[1, 0, 0], [-0.1, 1.2, 0], [0.2, -0.15, 1.1]], dtype=torch.float32, device=device)
     cutoff = 0.5
     neighbor_list = NeighborList(cutoff, device=device)
-    pme = CoulombPME(neighbor_list, exclusions, 14, 16, 15, 5, 5.0, 138.935, cutoff, device)
+    pme = CoulombPME(neighbor_list, exclusions, 14, 16, 15, 5, 5.0, 138.935, cutoff)
 
     # Compare forces and energies to values computed with OpenMM.
 
@@ -184,7 +184,7 @@ def test_charge_deriv(device):
     box_vectors = torch.tensor([[1, 0, 0], [0,1.1, 0], [0, 0, 1.2]], dtype=torch.float32, device=device)
     cutoff = 0.5
     neighbor_list = NeighborList(cutoff, device=device)
-    pme = CoulombPME(neighbor_list, exclusions, 14, 15, 16, 5, 4.985823141035867, 138.935, device=device)
+    pme = CoulombPME(neighbor_list, exclusions, 14, 15, 16, 5, 4.985823141035867, 138.935)
 
     # Compute derivatives of the energies with respect to charges.
 
@@ -233,7 +233,7 @@ def test_double_derivative(device):
     charges.requires_grad_()
     box_vectors = torch.tensor([[1, 0, 0], [0,1.1, 0], [0, 0, 1.2]], dtype=torch.float32, device=device)
     neighbor_list = NeighborList(device=device)
-    pme = CoulombPME(neighbor_list, None, 14, 16, 15, 5, 5.0, 138.935, device=device)
+    pme = CoulombPME(neighbor_list, None, 14, 16, 15, 5, 5.0, 138.935)
     edir = pme(positions, charges, box_vectors, True, False)
     erecip = pme(positions, charges, box_vectors, False, True)
     ddir = torch.autograd.grad(edir, positions, retain_graph=True)
@@ -256,7 +256,7 @@ def test_compile_and_pickle(device):
     charges = torch.tensor([(i-4)*0.1 for i in range(9)], dtype=torch.float32, device=device)
     box_vectors = torch.tensor([[1, 0, 0], [0,1.1, 0], [0, 0, 1.2]], dtype=torch.float32, device=device)
     neighbor_list = NeighborList(device=device)
-    pme = CoulombPME(neighbor_list, None, 14, 16, 15, 5, 5.0, 138.935, device=device)
+    pme = CoulombPME(neighbor_list, None, 14, 16, 15, 5, 5.0, 138.935)
 
     # Check that torch.compile works correctly.
 
