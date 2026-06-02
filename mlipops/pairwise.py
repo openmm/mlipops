@@ -3,7 +3,7 @@ from collections.abc import Callable
 from typing import Any
 try:
     import triton
-    from pairwise_triton import backprop_delta_kernel
+    from .pairwise_triton import backprop_delta_kernel
     has_triton = True
 except ImportError:
     has_triton = False

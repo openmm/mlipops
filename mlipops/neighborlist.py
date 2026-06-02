@@ -1,7 +1,7 @@
 import torch
 try:
     import triton
-    from neighborlist_triton import find_sort_keys_kernel, find_neighbors_kernel
+    from .neighborlist_triton import find_sort_keys_kernel, find_neighbors_kernel
     has_triton = True
 except ImportError:
     has_triton = False
@@ -128,7 +128,8 @@ class NeighborList(torch.nn.Module):
                 # Try again with a larger output buffer.
 
                 result = self._compute_large(positions, box_vectors, cutoff)
-        result = self._compute_small(positions, box_vectors, cutoff)
+        else:
+            result = self._compute_small(positions, box_vectors, cutoff)
 
         # Cache the result for future use.
 

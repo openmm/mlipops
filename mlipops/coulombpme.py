@@ -5,7 +5,7 @@ from .neighborlist import NeighborList
 from .pairwise import Pairwise
 try:
     import triton
-    from pme_triton import spread_charge_kernel, interp_derivatives_kernel
+    from .pme_triton import spread_charge_kernel, interp_derivatives_kernel
     has_triton = True
 except ImportError:
     has_triton = False
