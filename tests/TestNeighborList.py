@@ -49,7 +49,6 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
     # Check that the right number of neighbors was found.
 
     found = set(tuple(pair) for pair in neighbors)
-    num_expected = 0
     index = torch.combinations(torch.arange(num_particles, device=device), with_replacement=include_self)
     pos = positions[index]
     distance = compute_distances(pos[:,0]-pos[:,1], box_vectors)
@@ -88,6 +87,38 @@ def test_no_cutoff(device, include_self, include_symmetric):
         if not include_symmetric:
             assert i <= j
 
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+def test_padding(device):
+    """Test padding when building a neighbor list."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_particles = 200 if device == 'cpu' else 1100
+    cutoff = 1.0
+    padding = 0.2
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    neighbor_list = NeighborList(cutoff, padding=padding, device=device)
+    assert neighbor_list.padding == padding
+    neighbors1 = neighbor_list(positions, None)
+
+    # Check that the right number of neighbors was found.
+
+    found = set(tuple(pair) for pair in neighbors1)
+    index = torch.combinations(torch.arange(num_particles, device=device))
+    pos = positions[index]
+    distance = compute_distances(pos[:,0]-pos[:,1], None)
+    mask = (distance < cutoff+padding).to(torch.int32)
+    num_expected = torch.sum(mask)
+    assert num_expected == len(found)
+
+    # Displacing the particles by a small amount should not change the return value.
+
+    neighbors2 = neighbor_list(positions+0.5*padding*torch.rand((num_particles,3), dtype=torch.float32, device=device), None)
+    assert neighbors1.equal(neighbors2)
+
+    # Displacing them by a larger amount should cause the neighbor list to be recalculated.
+
+    neighbors3 = neighbor_list(positions+1.5*padding*torch.rand((num_particles,3), dtype=torch.float32, device=device), None)
+    assert not neighbors1.equal(neighbors3)
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):
