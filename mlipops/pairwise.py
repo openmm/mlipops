@@ -1,6 +1,7 @@
 import torch
 from collections.abc import Callable
 from typing import Any
+from .utils import periodic_displacements
 try:
     import triton
     from .pairwise_triton import backprop_delta_kernel
@@ -98,7 +99,7 @@ class Pairwise(torch.nn.Module):
         if has_triton and positions.device.type == 'cuda':
             delta = DeltaFunction.apply(positions, pairs, box_vectors)
         else:
-            delta = periodic_delta(positions, pairs, box_vectors)
+            delta = periodic_displacements(positions[pairs[:,1]] - positions[pairs[:,0]], box_vectors)
         distance = torch.linalg.vector_norm(delta, dim=1)
         energy = self.computation(pairs, distance, parameters)
         masks = []
@@ -118,18 +119,6 @@ class Pairwise(torch.nn.Module):
         return torch.sum(torch.where(mask, energy, 0.0))
 
 
-def periodic_delta(positions: torch.Tensor, pairs: torch.Tensor, box_vectors: torch.Tensor):
-    delta = positions[pairs[:,1]] - positions[pairs[:,0]]
-    if box_vectors is not None:
-        scale = torch.round(delta[:,2]/box_vectors[2,2])
-        delta = delta - scale.unsqueeze(1)*box_vectors[2].view((1,3)).expand((-1,3))
-        scale = torch.round(delta[:,1]/box_vectors[1,1])
-        delta = delta - scale.unsqueeze(1)*box_vectors[1].view((1,3)).expand((-1,3))
-        scale = torch.round(delta[:,0]/box_vectors[0,0])
-        delta = delta - scale.unsqueeze(1)*box_vectors[0].view((1,3)).expand((-1,3))
-    return delta
-
-
 class DeltaFunction(torch.autograd.Function):
     """Compute the displacement between pairs of particles, optionally taking periodic boundary conditions into
     account.  PyTorch can compute the forward pass efficiently, but the default implementation of the backward pass
@@ -137,7 +126,7 @@ class DeltaFunction(torch.autograd.Function):
     """
     @staticmethod
     def forward(ctx, positions: torch.Tensor, pairs: torch.Tensor, box_vectors: torch.Tensor):
-        delta = periodic_delta(positions, pairs, box_vectors)
+        delta = periodic_displacements(positions[pairs[:,1]] - positions[pairs[:,0]], box_vectors)
         ctx.save_for_backward(positions, pairs)
         return delta
 

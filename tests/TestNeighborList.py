@@ -1,18 +1,8 @@
 import torch
 import pickle
 import pytest
-from mlipops import NeighborList
+from mlipops import NeighborList, periodic_displacements
 
-def compute_distances(delta, box_vectors):
-    if box_vectors is not None:
-        scale = torch.round(delta[:, 2]/box_vectors[2,2])
-        delta -= scale.reshape((-1,1))*box_vectors[2].reshape((1,3))
-        scale = torch.round(delta[:, 1]/box_vectors[1,1])
-        delta -= scale.reshape((-1,1))*box_vectors[1].reshape((1,3))
-        scale = torch.round(delta[:, 0]/box_vectors[0,0])
-        delta -= scale.reshape((-1,1))*box_vectors[0].reshape((1,3))
-    distance = torch.linalg.norm(delta, dim=-1)
-    return distance
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('periodic,include_self,include_symmetric', [(False,False,False),(True,False,False),(False,False,True),(True,True,False),(False,True,True)])
@@ -43,7 +33,7 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
         j = int(neighbors[index, 1])
         if not include_self:
             assert i != j
-        distance = compute_distances((positions[i]-positions[j]).reshape((1,3)), box_vectors)
+        distance = torch.linalg.norm(periodic_displacements((positions[i]-positions[j]).reshape((1,3)), box_vectors), dim=-1)
         assert distance <= cutoff
 
     # Check that the right number of neighbors was found.
@@ -51,7 +41,7 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
     found = set(tuple(pair) for pair in neighbors)
     index = torch.combinations(torch.arange(num_particles, device=device), with_replacement=include_self)
     pos = positions[index]
-    distance = compute_distances(pos[:,0]-pos[:,1], box_vectors)
+    distance = torch.linalg.norm(periodic_displacements(pos[:,0]-pos[:,1], box_vectors), dim=-1)
     mask = (distance < cutoff).to(torch.int32)
     if include_symmetric:
         mask *= torch.where(index[:,0] != index[:,1], 2, 1)
@@ -105,7 +95,7 @@ def test_padding(device):
     found = set(tuple(pair) for pair in neighbors1)
     index = torch.combinations(torch.arange(num_particles, device=device))
     pos = positions[index]
-    distance = compute_distances(pos[:,0]-pos[:,1], None)
+    distance = torch.linalg.norm(pos[:,0]-pos[:,1], dim=-1)
     mask = (distance < cutoff+padding).to(torch.int32)
     num_expected = torch.sum(mask)
     assert num_expected == len(found)

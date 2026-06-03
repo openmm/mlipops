@@ -1,4 +1,5 @@
 import torch
+from .utils import periodic_displacements
 try:
     import triton
     from .neighborlist_triton import find_sort_keys_kernel, find_neighbors_kernel
@@ -144,14 +145,7 @@ class NeighborList(torch.nn.Module):
         """
         # Build matrices of deltas and distances.
 
-        delta = positions.view((-1,1,3)) - positions
-        if box_vectors is not None:
-            scale = torch.round(delta[:,:,2]/box_vectors[2,2])
-            delta = delta - scale.unsqueeze(2)*box_vectors[2].view((1,1,3)).expand((-1,-1,3))
-            scale = torch.round(delta[:,:,1]/box_vectors[1,1])
-            delta = delta - scale.unsqueeze(2)*box_vectors[1].view((1,1,3)).expand((-1,-1,3))
-            scale = torch.round(delta[:,:,0]/box_vectors[0,0])
-            delta = delta - scale.unsqueeze(2)*box_vectors[0].view((1,1,3)).expand((-1,-1,3))
+        delta = periodic_displacements(positions.view((-1,1,3)) - positions, box_vectors)
         distance = torch.linalg.vector_norm(delta, dim=2)
 
         # Create a mask for which pairs to return.
@@ -205,14 +199,7 @@ class NeighborList(torch.nn.Module):
 
         # Find pairs of blocks that can interact.
 
-        block_delta = block_center.view((-1,1,3)) - block_center
-        if box_vectors is not None:
-            scale = torch.round(block_delta[:,:,2]/box_vectors[2,2])
-            block_delta = block_delta - scale.unsqueeze(2)*box_vectors[2].view((1,1,3)).expand((-1,-1,3))
-            scale = torch.round(block_delta[:,:,1]/box_vectors[1,1])
-            block_delta = block_delta - scale.unsqueeze(2)*box_vectors[1].view((1,1,3)).expand((-1,-1,3))
-            scale = torch.round(block_delta[:,:,0]/box_vectors[0,0])
-            block_delta = block_delta - scale.unsqueeze(2)*box_vectors[0].view((1,1,3)).expand((-1,-1,3))
+        block_delta = periodic_displacements(block_center.view((-1,1,3)) - block_center, box_vectors)
         block_delta = torch.relu(block_delta.abs()-block_width.view((-1,1,3))-block_width)
         block_distance = torch.linalg.vector_norm(block_delta, dim=2)
         n = block_positions.shape[0]
