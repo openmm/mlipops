@@ -38,10 +38,12 @@ def interp_derivatives_kernel(pos_deriv_ptr, charge_deriv_ptr, grid_ptr: tl.cons
     tix = tl.load(ti_ptr+3*particle)
     tiy = tl.load(ti_ptr+3*particle+1)
     tiz = tl.load(ti_ptr+3*particle+2)
-    pos_derivx = tl.zeros((BLOCK_SIZE,), tl.float32)
-    pos_derivy = tl.zeros((BLOCK_SIZE,), tl.float32)
-    pos_derivz = tl.zeros((BLOCK_SIZE,), tl.float32)
-    charge_deriv = tl.zeros((BLOCK_SIZE,), tl.float32)
+    if pos_deriv_ptr is not None:
+        pos_derivx = tl.zeros((BLOCK_SIZE,), tl.float32)
+        pos_derivy = tl.zeros((BLOCK_SIZE,), tl.float32)
+        pos_derivz = tl.zeros((BLOCK_SIZE,), tl.float32)
+    if charge_deriv_ptr is not None:
+        charge_deriv = tl.zeros((BLOCK_SIZE,), tl.float32)
     for ix in tl.range(0, order):
         xindex = (tix+ix) % gridx
         for iy in tl.range(0, order):
@@ -52,14 +54,18 @@ def interp_derivatives_kernel(pos_deriv_ptr, charge_deriv_ptr, grid_ptr: tl.cons
                 dx = tl.load(data_ptr+3*num_particles*ix+3*particle, mask=mask)
                 dy = tl.load(data_ptr+3*num_particles*iy+3*particle+1, mask=mask)
                 dz = tl.load(data_ptr+3*num_particles*iz+3*particle+2, mask=mask)
-                ddx = tl.load(ddata_ptr+3*num_particles*ix+3*particle, mask=mask)
-                ddy = tl.load(ddata_ptr+3*num_particles*iy+3*particle+1, mask=mask)
-                ddz = tl.load(ddata_ptr+3*num_particles*iz+3*particle+2, mask=mask)
-                pos_derivx += ddx*dy*dz*g
-                pos_derivy += dx*ddy*dz*g
-                pos_derivz += dx*dy*ddz*g
-                charge_deriv += dx*dy*dz*g
-    tl.store(pos_deriv_ptr+3*particle, pos_derivx, mask=mask)
-    tl.store(pos_deriv_ptr+3*particle+1, pos_derivy, mask=mask)
-    tl.store(pos_deriv_ptr+3*particle+2, pos_derivz, mask=mask)
-    tl.store(charge_deriv_ptr+particle, charge_deriv, mask=mask)
+                if pos_deriv_ptr is not None:
+                    ddx = tl.load(ddata_ptr+3*num_particles*ix+3*particle, mask=mask)
+                    ddy = tl.load(ddata_ptr+3*num_particles*iy+3*particle+1, mask=mask)
+                    ddz = tl.load(ddata_ptr+3*num_particles*iz+3*particle+2, mask=mask)
+                    pos_derivx += ddx*dy*dz*g
+                    pos_derivy += dx*ddy*dz*g
+                    pos_derivz += dx*dy*ddz*g
+                if charge_deriv_ptr is not None:
+                    charge_deriv += dx*dy*dz*g
+    if pos_deriv_ptr is not None:
+        tl.store(pos_deriv_ptr+3*particle, pos_derivx, mask=mask)
+        tl.store(pos_deriv_ptr+3*particle+1, pos_derivy, mask=mask)
+        tl.store(pos_deriv_ptr+3*particle+2, pos_derivz, mask=mask)
+    if charge_deriv_ptr is not None:
+        tl.store(charge_deriv_ptr+particle, charge_deriv, mask=mask)

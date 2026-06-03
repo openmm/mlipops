@@ -248,6 +248,36 @@ def test_double_derivative(device):
         torch.autograd.grad(drecip, charges, retain_graph=True)
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('include_direct, include_reciprocal', [(True,False), (False,True), (True,True)])
+def test_compute_field(device, include_direct, include_reciprocal):
+    """Test computing the electric field."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    positions = 3*torch.rand((30, 3), dtype=torch.float32, device=device)-1
+    charges = torch.tensor([(i-4)*0.1 for i in range(30)], dtype=torch.float32, device=device)
+    box_vectors = torch.tensor([[1, 0, 0], [0,1.1, 0], [0, 0, 1.2]], dtype=torch.float32, device=device)
+    field_positions = 3*torch.rand((10, 3), dtype=torch.float32, device=device)-1
+    cutoff = 0.5
+    neighbor_list = NeighborList(cutoff, device=device)
+    pme = CoulombPME(neighbor_list, None, 14, 16, 15, 5, 5.0, 138.935)
+    field = pme.compute_field(field_positions, positions, charges, box_vectors, include_direct, include_reciprocal)
+
+    # Compare the field at each position to the force on a particle of charge 1 at the same position.
+
+    for p, f1 in zip(field_positions, field):
+        padded_pos = torch.cat([positions, p.unsqueeze(0)])
+        padded_pos.requires_grad_(True)
+        padded_charges = torch.nn.functional.pad(charges, pad=(0,1), value=1)
+        energy = pme(padded_pos, padded_charges, box_vectors, include_direct, include_reciprocal)
+        energy.backward()
+        f2 = -padded_pos.grad[-1]
+        norm1 = torch.linalg.vector_norm(f1)
+        norm2 = torch.linalg.vector_norm(f2)
+        diffnorm = torch.linalg.vector_norm(f1-f2)/norm1
+        assert torch.allclose(norm1, norm2, rtol=5e-3)
+        assert diffnorm < 5e-3
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):
     """Test that CoulombPME can be compiled and pickled."""
     if not torch.cuda.is_available() and device == 'cuda':
