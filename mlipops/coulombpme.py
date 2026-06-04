@@ -103,8 +103,8 @@ class CoulombPME(torch.nn.Module):
         self.prefactor = prefactor
         self.cutoff = neighbor_list.cutoff if cutoff is None else cutoff
         self.use_triton = has_triton and torch.device(device).type == 'cuda'
-        self.direct = Pairwise(coulomb.CoulombEwald(alpha), self.cutoff, exclusions)
-        self.exclusion_correction = Pairwise(coulomb.CoulombEwaldExclusionCorrection(alpha), None)
+        self.direct = Pairwise(coulomb.ErfcScaledInteraction(coulomb.point_charge_interaction, alpha), self.cutoff, exclusions)
+        self.exclusion_correction = Pairwise(coulomb.ErfScaledInteraction(coulomb.point_charge_interaction, alpha), None)
 
         # Initialize the bspline moduli.
 
@@ -208,7 +208,7 @@ class CoulombPME(torch.nn.Module):
             r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
             z = self.alpha*r
             field = charges.unsqueeze(1)*delta*(self.alpha*(2/math.sqrt(math.pi))*torch.exp(-z**2)/r**2 + torch.erfc(z)/r**3)
-            field *= (r > 0)*(r < self.cutoff)
+            field = torch.where((r > 0)*(r < self.cutoff), field, 0)
             field = field.sum(dim=1)
         else:
             field = torch.zeros_like(field_positions)

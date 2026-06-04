@@ -27,6 +27,6 @@ PyPI packages will be coming once the code matures a little more.
 These are the currently implemented features.  Many more are planned.  Expect this list to grow quickly.
 
 - Neighbor list construction
-- Coulomb interactions with Particle Mesh Ewald
+- Coulomb interactions with Particle Mesh Ewald and Reaction Field
 - Arbitrary pairwise potentials
 - Periodic boundary conditions with triclinic boxes
