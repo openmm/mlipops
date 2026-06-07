@@ -24,6 +24,12 @@ class NeighborList(torch.nn.Module):
     and no particle has moved by more than half the padding distance, the previous result can be returned.  The
     disadvantage is that more pairs need to be included in the neighbor list.  This option is generally useful only
     when the cost of finding neighbors is large compared to the cost of computing interactions based on them.
+
+    .. warning::
+        Because NeighborList caches its inputs and outputs, you must never modify them in place after calling the
+        NeighborList.  For example, if you call it once with a Tensor of positions, modify the Tensor in place to
+        contain different positions, and then pass it to the NeighborList again, it will incorrectly think the positions
+        have not changed.
     """
     def __init__(self, cutoff: float | None = None, include_self: bool = False, include_symmetric: bool = False,
                  padding: float | None = None, device: str = 'cpu'):
@@ -56,6 +62,7 @@ class NeighborList(torch.nn.Module):
         self._prev_pairs = None
         self._prev_num_particles = None
         self._prev_positions = None
+        self._prev_box_vectors = None
 
     @property
     def cutoff(self):
@@ -110,13 +117,21 @@ class NeighborList(torch.nn.Module):
                 self._prev_num_particles = num_particles
             return self._prev_pairs
 
-        # If no particle has moved more than half the cutoff distance, we can return the cached neighbors.
+        # See if we have cached neighbors that are still valid.
 
-        if self._padding is not None and self._prev_pairs is not None:
-            delta = positions-self._prev_positions
-            distance = torch.linalg.vector_norm(delta, dim=1)
-            if torch.max(distance) < self._padding:
+        if self._prev_pairs is not None and ((self._prev_box_vectors is box_vectors) or
+                                             (self._prev_box_vectors is not None and box_vectors is not None and box_vectors.equal(self._prev_box_vectors))):
+            if positions is self._prev_positions:
+                # The positions are exactly the same as before.
+
                 return self._prev_pairs
+            if self._padding is not None:
+                # If no particle has moved more than half the cutoff distance, we can return the cached neighbors.
+
+                delta = positions-self._prev_positions
+                distance = torch.linalg.vector_norm(delta, dim=1)
+                if torch.max(distance) < self._padding:
+                    return self._prev_pairs
 
         # Compute a new list of pairs.
 
@@ -134,9 +149,9 @@ class NeighborList(torch.nn.Module):
 
         # Cache the result for future use.
 
-        if self._padding is not None:
-            self._prev_positions = positions
-            self._prev_pairs = result
+        self._prev_positions = positions
+        self._prev_box_vectors = box_vectors
+        self._prev_pairs = result
         return result
 
     def _compute_small(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float):

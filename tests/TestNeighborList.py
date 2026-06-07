@@ -48,6 +48,7 @@ def test_neighbors(device, periodic, include_self, include_symmetric):
     num_expected = torch.sum(mask)
     assert num_expected == len(found)
 
+
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('include_self', [True, False])
 @pytest.mark.parametrize('include_symmetric', [True, False])
@@ -77,6 +78,7 @@ def test_no_cutoff(device, include_self, include_symmetric):
         if not include_symmetric:
             assert i <= j
 
+
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_padding(device):
     """Test padding when building a neighbor list."""
@@ -103,12 +105,38 @@ def test_padding(device):
     # Displacing the particles by a small amount should not change the return value.
 
     neighbors2 = neighbor_list(positions+0.5*padding*torch.rand((num_particles,3), dtype=torch.float32, device=device), None)
-    assert neighbors1.equal(neighbors2)
+    assert neighbors1 is neighbors2
 
     # Displacing them by a larger amount should cause the neighbor list to be recalculated.
 
     neighbors3 = neighbor_list(positions+1.5*padding*torch.rand((num_particles,3), dtype=torch.float32, device=device), None)
     assert not neighbors1.equal(neighbors3)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('periodic', [True, False])
+def test_caching(device, periodic):
+    """Test caching of neighbors."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_particles = 200
+    cutoff = 0.5
+    if periodic:
+        box_vectors = torch.tensor([[2.0, 0.0, 0.0],
+                                    [0.1, 1.6, 0.0],
+                                    [0.2, 0.1, 1.5]], dtype=torch.float32, device=device)
+    else:
+        box_vectors = None
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    neighbor_list = NeighborList(cutoff, device=device)
+    neighbors1 = neighbor_list(positions, box_vectors)
+    assert neighbor_list(positions, box_vectors) is neighbors1
+    if periodic:
+        assert neighbor_list(positions, box_vectors.clone()) is neighbors1
+    neighbors2 = neighbor_list(positions.clone(), box_vectors)
+    assert neighbors2 is not neighbors1
+    assert neighbors2.equal(neighbors1)
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):
