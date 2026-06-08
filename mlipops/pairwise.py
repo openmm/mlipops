@@ -1,13 +1,7 @@
 import torch
 from collections.abc import Callable
 from typing import Any
-from .utils import periodic_displacements
-try:
-    import triton
-    from .pairwise_triton import backprop_delta_kernel
-    has_triton = True
-except ImportError:
-    has_triton = False
+from .utils import pairwise_displacements
 
 
 class Pairwise(torch.nn.Module):
@@ -96,10 +90,7 @@ class Pairwise(torch.nn.Module):
         -------
         a torch.Tensor containing the energy of the interaction
         """
-        if has_triton and positions.device.type == 'cuda':
-            delta = DeltaFunction.apply(positions, pairs, box_vectors)
-        else:
-            delta = periodic_displacements(positions[pairs[:,1]] - positions[pairs[:,0]], box_vectors)
+        delta = pairwise_displacements(positions, pairs, box_vectors)
         distance = torch.linalg.vector_norm(delta, dim=1)
         energy = self.computation(pairs, distance, parameters)
         masks = []
@@ -117,23 +108,3 @@ class Pairwise(torch.nn.Module):
         else:
             mask = masks[0]*masks[1]
         return torch.sum(torch.where(mask, energy, 0.0))
-
-
-class DeltaFunction(torch.autograd.Function):
-    """Compute the displacement between pairs of particles, optionally taking periodic boundary conditions into
-    account.  PyTorch can compute the forward pass efficiently, but the default implementation of the backward pass
-    is very slow.  We use a Triton kernel to do it more efficiently.
-    """
-    @staticmethod
-    def forward(ctx, positions: torch.Tensor, pairs: torch.Tensor, box_vectors: torch.Tensor):
-        delta = periodic_displacements(positions[pairs[:,1]] - positions[pairs[:,0]], box_vectors)
-        ctx.save_for_backward(positions, pairs)
-        return delta
-
-    @staticmethod
-    def backward(ctx, *grad_outputs: torch.Tensor):
-        positions, pairs = ctx.saved_tensors
-        result = torch.zeros_like(positions)
-        g = lambda meta: (triton.cdiv(positions.shape[0], meta['BLOCK_SIZE']),)
-        backprop_delta_kernel[g](result, grad_outputs[0], pairs, pairs.shape[0], 256)
-        return result, None, None

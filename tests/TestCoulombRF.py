@@ -38,7 +38,7 @@ def test_nonperiodic(device):
                        [-128.27081025114555, -18.647458530177563, 30.231653223316115],
                        [125.18336268968794, 22.57743495163318, -20.334362196673702]]
     energy.backward()
-    assert torch.allclose(torch.tensor(expected_forces), -positions.grad, rtol=1e-4, atol=1e-5)
+    assert torch.allclose(torch.tensor(expected_forces), -positions.grad.cpu(), rtol=1e-4, atol=1e-5)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -76,7 +76,7 @@ def test_periodic(device):
                        [-119.2718149330191, -32.33207591210644, 35.508803501517335],
                        [125.18336268968794, 22.57743495163318, -20.334362196673702]]
     energy.backward()
-    assert torch.allclose(torch.tensor(expected_forces), -positions.grad, rtol=1e-4, atol=1e-5)
+    assert torch.allclose(torch.tensor(expected_forces), -positions.grad.cpu(), rtol=1e-4, atol=1e-5)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -107,7 +107,7 @@ def test_exclusions(device):
     # Compare forces and energies to values computed with OpenMM.
 
     energy = rf(positions, charges, box_vectors)
-    assert torch.allclose(torch.tensor(-5.113604855798104), energy)
+    assert torch.allclose(torch.tensor(-5.113604855798104), energy.cpu())
     expected_forces = [[6.168991485924394, -17.109168886119946, -3.8375256245936216],
                        [-16.403598601078414, 50.17931158347308, 27.033087486341337],
                        [2.1923252979038685, -0.941117357356672, 5.303970800396397],
@@ -118,7 +118,7 @@ def test_exclusions(device):
                        [7.778136091607013, -6.608085814016995, 11.610706675502007],
                        [-1.8665883349381773, -3.146555146456264, 3.5637346293416243]]
     energy.backward()
-    assert torch.allclose(torch.tensor(expected_forces), -positions.grad, rtol=1e-4, atol=1e-5)
+    assert torch.allclose(torch.tensor(expected_forces), -positions.grad.cpu(), rtol=1e-4, atol=1e-5)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
