@@ -10,7 +10,7 @@ def test_nonperiodic(device):
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     neighbor_list = NeighborList(None, device=device)
-    zbl = ZBL(neighbor_list, 138.935, 5.2917721e-2)
+    zbl = ZBL(neighbor_list, 138.935, 0.052917721)
     pos = [[0.7713206433, 0.02075194936, 0.6336482349],
            [0.7488038825, 0.4985070123, 0.2247966455],
            [0.1980628648, 0.7605307122, 0.1691108366],
@@ -35,7 +35,7 @@ def test_periodic(device):
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     neighbor_list = NeighborList(None, device=device)
-    zbl = ZBL(neighbor_list, 138.935, 5.2917721e-2)
+    zbl = ZBL(neighbor_list, 138.935, 0.052917721)
     pos = [[0.7713206433, 0.02075194936, 0.6336482349],
            [0.7488038825, 0.4985070123, 0.2247966455],
            [0.1980628648, 0.7605307122, 0.1691108366],
@@ -63,7 +63,7 @@ def test_cutoff(device):
     numbers = torch.tensor([10, 15], dtype=torch.int32, device=device)
     radii = torch.tensor([0.9, 0.8], dtype=torch.float32, device=device)
     neighbor_list = NeighborList(3.0, device=device)
-    zbl = ZBL(neighbor_list, 138.935, 5.2917721e-2)
+    zbl = ZBL(neighbor_list, 138.935, 0.052917721)
     for d in [0.1*i for i in range(5, 25)]:
         positions = torch.tensor([[0.0, 0.0, 0.0], [0.0, d, 0.0]], dtype=torch.float32, device=device)
         energy1 = zbl(positions, numbers, None, None)
@@ -84,7 +84,7 @@ def test_compile_and_pickle(device):
     radii = torch.rand((9,), dtype=torch.float32, device=device)
     box_vectors = torch.tensor([[1, 0, 0], [0,1.1, 0], [0, 0, 1.2]], dtype=torch.float32, device=device)
     neighbor_list = NeighborList(0.5, device=device)
-    zbl = ZBL(neighbor_list, 138.935, 5.2917721e-2)
+    zbl = ZBL(neighbor_list, 138.935, 0.052917721)
 
     # Check that torch.compile works correctly.
 

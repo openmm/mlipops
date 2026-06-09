@@ -83,3 +83,28 @@ class DisplacementFunction(torch.autograd.Function):
         g = lambda meta: (triton.cdiv(positions.shape[0], meta['BLOCK_SIZE']),)
         backprop_delta_kernel[g](result, grad_outputs[0], pairs, pairs.shape[0], 256)
         return result, None, None
+
+
+def get_covalent_radii(atomic_numbers: torch.Tensor, bohr_radius: float):
+    """Get the covalent radii for a set of atoms based on their atomic numbers.
+
+    Covalent radii are not uniquely defined.  Various sets of values have been published.  The ones used here are chosen
+    to be consistent with the simple-dfdt3 library (https://github.com/dftd3/simple-dftd3).  They are taken from
+    Pyykko and Atsumi, Chem. Eur. J. 15, 2009, 188-197, except that the radii of metals have been reduced by 10%.
+
+    Parameters
+    ----------
+    atomic_numbers: torch.Tensor
+        a Tensor of shape (n_atoms,) containing the atomic number of each atom
+    bohr_radius: float
+        the Bohr radius.  This sets the units.  Pass 1.0 to get radii in Bohr, 0.052917721 to get radii in nanometers,
+        or 0.52917721 to get radii in Angstroms.
+    """
+    radii = [0, 32, 46, 120, 94, 77, 75, 71, 63, 64, 67, 140, 125, 112, 104, 110, 102, 99, 96, 176, 154, 133, 122,
+             121, 110, 107, 104, 100, 99, 101, 109, 112, 109, 114, 110, 113, 117, 189, 167, 147, 139, 132, 124, 114,
+             112, 112, 108, 114, 123, 128, 126, 126, 123, 132, 131, 209, 176, 162, 147, 158, 157, 156, 155, 151,
+             152, 151, 150, 149, 149, 148, 153, 146, 137, 131, 123, 118, 115, 111, 112, 112, 132, 130, 130, 136,
+             131, 138, 142, 200, 181, 167, 158, 152, 153, 154, 155, 149, 149, 151, 151, 148, 150, 156, 158, 145,
+             141, 134, 129, 127, 121, 115, 114, 109, 122, 136, 143, 146, 158, 148, 157]
+    covalent_radii = torch.tensor(radii, dtype=torch.float32, device=atomic_numbers.device)*bohr_radius/52.9177210903
+    return covalent_radii[atomic_numbers]

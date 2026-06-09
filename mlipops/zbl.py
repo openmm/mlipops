@@ -12,17 +12,18 @@ class ZBL(torch.nn.Module):
     Because it was parameterized based on scattering data, it does not give an accurate description of the interaction
     between covalently bonded atoms.  It therefore should usually be restricted to only very short distances.  You can
     optionally provide a covalent radius for each atom.  The ZBL interaction is then multiplied by a cosine cutoff
-    function to make it go to zero when the distance between two atoms equals the sum of their covalent radii.
+    function to make it go to zero when the distance between two atoms equals the sum of their covalent radii.  You can
+    obtain covalent radii by calling get_covalent_radii(), or you can use other values that you choose.
 
     When you create an instance of this class, you must specify the values of Coulomb's constant 1/(4*pi*eps0) and the
     Bohr radius.  The values you specify set the unit system.  Here are their values for some common units.
 
-    kJ/mol, nm: 138.935457, 5.2917721e-2
-    kJ/mol, A: 1389.35457, 5.2917721e-1
-    kcal/mol, nm: 33.2063713, 5.2917721e-2
-    kcal/mol, A: 332.063713, 5.2917721e-1
-    eV, nm: 1.43996454, 5.2917721e-2
-    eV, A: 14.3996454, 5.2917721e-1
+    kJ/mol, nm: 138.935457, 0.052917721
+    kJ/mol, A: 1389.35457, 0.52917721
+    kcal/mol, nm: 33.2063713, 0.052917721
+    kcal/mol, A: 332.063713, 0.52917721
+    eV, nm: 1.43996454, 0.052917721
+    eV, A: 14.3996454, 0.52917721
     hartree, bohr: 1.0, 1.0
     """
     def __init__(self, neighbor_list: NeighborList, prefactor: float, bohr_radius: float):
