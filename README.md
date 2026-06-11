@@ -29,5 +29,6 @@ These are the currently implemented features.  Many more are planned.  Expect th
 - Neighbor list construction
 - Coulomb interactions with Particle Mesh Ewald and Reaction Field
 - Ziegler-Biersack-Littmark (ZBL) potential
+- DFT-D3(BJ) dispersion
 - Arbitrary pairwise potentials
 - Periodic boundary conditions with triclinic boxes
