@@ -1,3 +1,4 @@
+from .coulombnc import CoulombNC
 from .coulombpme import CoulombPME
 from .coulombrf import CoulombRF
 from .dftd3 import DFTD3

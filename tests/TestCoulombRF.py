@@ -153,7 +153,7 @@ def test_compute_field(device):
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):
-    """Test that CoulombPME can be compiled and pickled."""
+    """Test that CoulombRF can be compiled and pickled."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     positions = 3*torch.rand((9, 3), dtype=torch.float32, device=device)-1

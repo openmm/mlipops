@@ -61,7 +61,6 @@ class CoulombRF(torch.nn.Module):
         if cutoff is not None and cutoff > neighbor_list.cutoff:
             raise ValueError("The cutoff cannot be larger than the NeighborList's cutoff")
         super().__init__()
-        device = neighbor_list.device
         self.neighbor_list = neighbor_list
         self.register_buffer('exclusions', exclusions)
         self.prefactor = prefactor
