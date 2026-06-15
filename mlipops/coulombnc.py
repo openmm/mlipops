@@ -8,8 +8,12 @@ from .utils import periodic_displacements
 class CoulombNC(torch.nn.Module):
     """Compute Coulomb interactions with no cutoff.
 
-    This class computes the energy of a set of charges.  Because it directly calculates all interactions regardless of
-    distance, it can only be used for non-periodic systems.  It is primarily useful for small, isolated molecules.
+    This class computes the energy of a set of multipoles.  Because it directly calculates all interactions regardless
+    of distance, it can only be used for non-periodic systems.  It is primarily useful for small, isolated molecules.
+
+    By default, the multipoles are simply point charges.  You can also include dipoles by passing
+    `max_multipole='dipole'` to the constructor.  In that case, you must provide dipole moments along with charges when
+    invoking the module.
 
     You can optionally specify that certain interactions should be omitted when computing the energy.  This is typically
     used for nearby atoms within the same molecule.
@@ -29,7 +33,7 @@ class CoulombNC(torch.nn.Module):
     eV, A: 14.3996454
     hartree, bohr: 1.0
     """
-    def __init__(self, exclusions: torch.Tensor, prefactor: float, device: str = 'cpu'):
+    def __init__(self, exclusions: torch.Tensor, prefactor: float, max_multipole='charge', device: str = 'cpu'):
         """Create on object for computing Coulomb interactions.
 
         Parameters
@@ -39,6 +43,9 @@ class CoulombNC(torch.nn.Module):
             should be omitted.
         prefactor: float
             Coulomb's constant 1/(4*pi*eps0).  This sets the unit system.
+        max_multipole: str
+            the maximum multipole order for each particle.  Allowed options are `'charge'` (point charges only) and
+            `'dipole'` (charges and dipoles).
         device: str
             the PyTorch device to perform calculation on.
         """
@@ -48,27 +55,41 @@ class CoulombNC(torch.nn.Module):
         self.neighbor_list = NeighborList(device=device)
         self.register_buffer('exclusions', exclusions)
         self.prefactor = prefactor
-        self.pairwise = Pairwise(coulomb.point_charge_interaction, None, exclusions)
+        self.max_multipole = max_multipole
+        if max_multipole == 'charge':
+            self.pairwise = Pairwise(coulomb.point_charge_interaction, None, exclusions)
+        elif max_multipole == 'dipole':
+            self.pairwise = Pairwise(coulomb.dipole_interaction, None, exclusions, requires_deltas=True)
+        else:
+            raise ValueError(f'Illegal value for max_multipole: {max_multipole}')
 
-    def forward(self, positions: torch.Tensor, charges: torch.Tensor):
+    def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor = None):
         """Compute the interaction.
 
         Parameters
         ----------
         positions: torch.Tensor
             a Tensor of shape (n_particles, 3) containing the Cartesian coordinates of each particle
-        charges:
+        charges: torch.Tensor
             a Tensor of shape (n_particles,) containing the charge of each particle
+        dipoles: torch.Tensor | None
+            a Tensor of shape (n_particles, 3) containing the dipole moment of each particle.  If max_multipole is
+            'charge', this is ignored.
 
         Returns
         -------
         a torch.Tensor containing the energy of the interaction
         """
         neighbors = self.neighbor_list(positions, None)
-        energy = self.pairwise(positions, charges, neighbors, None)
+        if self.max_multipole == 'charge':
+            params = charges
+        else:
+            params = (charges, dipoles)
+        energy = self.pairwise(positions, params, neighbors, None)
         return self.prefactor*energy
 
-    def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor):
+    def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
+                      dipoles: torch.Tensor = None):
         """Compute the electric field produced by the particles at a set of points.
 
         Parameters
@@ -79,6 +100,9 @@ class CoulombNC(torch.nn.Module):
             a Tensor of shape (n_particles, 3) containing the Cartesian coordinates of each particle
         charges:
             a Tensor of shape (n_particles,) containing the charge of each particle
+        dipoles: torch.Tensor | None
+            a Tensor of shape (n_particles, 3) containing the dipole moment of each particle.  If max_multipole is
+            'charge', this is ignored.
 
         Returns
         -------
@@ -86,7 +110,10 @@ class CoulombNC(torch.nn.Module):
         """
         delta = periodic_displacements(field_positions.view((-1,1,3))-positions, None)
         r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
-        field = charges.unsqueeze(1)*delta*r**-3
+        denom3 = r**-3
+        field = charges.unsqueeze(1)*delta*denom3
+        if self.max_multipole != 'charge':
+            field += (3*(dipoles.unsqueeze(0)*delta).sum(axis=2, keepdim=True)*delta*r**-2 - dipoles)*denom3
         field = torch.where((r > 0), field, 0)
         field = field.sum(dim=1)
         return self.prefactor*field

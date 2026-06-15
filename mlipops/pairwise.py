@@ -33,12 +33,24 @@ class Pairwise(torch.nn.Module):
 
     >>> energy = pairwise(positions, params, pairs, box_vectors)
 
+    The above interface assumes the interaction is isotropic, depending only on the distances between particles.
+    Some interactions, such as those involving multipoles, depend on the full displacement vectors.  In that case,
+    specify `requires_deltas=True` when invoking the constructor.  In that case, a fourth argument will be passed
+    to the computation function:
+
+    >>> def coulomb(pairs, r, params, deltas):
+    >>>     ...
+
+    `deltas` is a Tensor of shape (npairs, 3) containing the displacement vector between the two particles for
+    each pair.
+
     When creating a Pairwise object, you can optionally specify a cutoff distance.  Pairs of particles that are
     further apart than the cutoff are ignored.  This is useful when using a NeighborList with padding, so some
     of the returned pairs are beyond the cutoff.  You also can specify a list of specific particle pairs whose
     interaction should always be excluded, regardless of their distance.
     """
-    def __init__(self, computation: Callable, cutoff: float | None, exclusions: torch.Tensor | None = None):
+    def __init__(self, computation: Callable, cutoff: float | None, exclusions: torch.Tensor | None = None,
+                 requires_deltas: bool = False):
         """Create an object for computing pairwise interactions.
 
         Parameters
@@ -50,10 +62,13 @@ class Pairwise(torch.nn.Module):
         exclusions: torch.Tensor
             a tensor of shape (n_exclusions, 2).  Each row contains the indices of two particles whose interaction
             should always be omitted.
+        requires_deltas: bool
+            whether displacement vectors should be passed to the computation function
         """
         super().__init__()
         self.computation = computation
         self.cutoff = cutoff
+        self.requires_deltas = requires_deltas
         self.register_buffer('exclusions', exclusions)
         if exclusions is None:
             self.exclusion_indices = None
@@ -92,7 +107,10 @@ class Pairwise(torch.nn.Module):
         """
         delta = pairwise_displacements(positions, pairs, box_vectors)
         distance = torch.linalg.vector_norm(delta, dim=1)
-        energy = self.computation(pairs, distance, parameters)
+        if self.requires_deltas:
+            energy = self.computation(pairs, distance, parameters, delta)
+        else:
+            energy = self.computation(pairs, distance, parameters)
         masks = []
         if self.cutoff is not None:
             masks.append(distance < self.cutoff)

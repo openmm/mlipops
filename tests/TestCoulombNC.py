@@ -5,8 +5,8 @@ from mlipops import NeighborList, CoulombNC
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
-def test_nonperiodic(device):
-    """Test Coulomb on a nonperiodic system."""
+def test_charges(device):
+    """Test Coulomb on a set of charges."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     coulomb = CoulombNC(None, 138.935, device=device)
@@ -79,15 +79,61 @@ def test_exclusions(device):
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
-def test_compute_field(device):
+def test_dipoles(device):
+    """Test Coulomb with dipoles."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    coulomb = CoulombNC(None, 138.935, 'dipole', device=device)
+    pos = [[0.7713206433, 0.02075194936, 0.6336482349],
+           [0.7488038825, 0.4985070123, 0.2247966455],
+           [0.1980628648, 0.7605307122, 0.1691108366],
+           [0.08833981417, 0.6853598184, 0.9533933462],
+           [0.003948266328, 0.5121922634, 0.8126209617],
+           [0.6125260668, 0.7217553174, 0.2918760682],
+           [0.9177741225, 0.7145757834, 0.542544368],
+           [0.1421700476, 0.3733407601, 0.6741336151],
+           [0.4418331744, 0.4340139933, 0.6177669785]]
+    positions = torch.tensor(pos, dtype=torch.float32, requires_grad=True, device=device)
+    charges = torch.tensor([(i-4)*0.1 for i in range(9)], dtype=torch.float32, device=device)
+    dipoles = torch.tensor([[-0.04980356, -0.04964022, 0.0629573],
+                            [-0.04855029, -0.02640511, 0.01638032],
+                            [0.01484668, 0.0209327, -0.01611683],
+                            [0.0081436, -0.06337297, 0.08099023],
+                            [0.10179879, -0.06040448, -0.03472181],
+                            [0.04007862, -0.05791511, 0.08975159],
+                            [0.02838723, -0.02750587, -0.04259318],
+                            [-0.0566733, -0.07421055, 0.00508225],
+                            [0.0467413, -0.04123889, 0.02388442]], dtype=torch.float32, device=device)
+
+    # Compare forces and energies to values computed with OpenMM.
+
+    energy = coulomb(positions, charges, dipoles)
+    assert torch.allclose(torch.tensor(15.034586180631099), energy)
+    expected_forces = [[-153.9276330034357, 109.14232185669124, 79.84017379495917],
+                       [-151.71623428240363, -21.891373777072527, 357.0844852050547],
+                       [-4.788141724458294, -63.089472609806705, 33.59790802772406],
+                       [260.3523590357624, 453.6178385490762, -21.639416295611827],
+                       [485.87724948064783, 724.8000599465211, 132.16238237998994],
+                       [94.58952656241871, 206.72949158312707, -325.4099644606805],
+                       [103.77722032167222, -105.20884954128394, -161.74400988735744],
+                       [-900.3102102185057, -1270.2268022546987, -24.222401204602534],
+                       [266.14586382830214, -33.87321375255371, -69.66915755947561]]
+    energy.backward()
+    assert torch.allclose(torch.tensor(expected_forces), -positions.grad.cpu(), rtol=1e-4, atol=1e-5)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('max_multipole', ['charge', 'dipole'])
+def test_compute_field(device, max_multipole):
     """Test computing the electric field."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     positions = 3*torch.rand((30, 3), dtype=torch.float32, device=device)-1
     charges = torch.tensor([(i-4)*0.1 for i in range(30)], dtype=torch.float32, device=device)
+    dipoles = 0.05*torch.randn((30, 3), dtype=torch.float32, device=device)
     field_positions = 3*torch.rand((10, 3), dtype=torch.float32, device=device)-1
-    coulomb = CoulombNC(None, 138.935, device=device)
-    field = coulomb.compute_field(field_positions, positions, charges)
+    coulomb = CoulombNC(None, 138.935, max_multipole, device=device)
+    field = coulomb.compute_field(field_positions, positions, charges, dipoles)
 
     # Compare the field at each position to the force on a particle of charge 1 at the same position.
 
@@ -95,7 +141,8 @@ def test_compute_field(device):
         padded_pos = torch.cat([positions, p.unsqueeze(0)])
         padded_pos.requires_grad_(True)
         padded_charges = torch.nn.functional.pad(charges, pad=(0,1), value=1)
-        energy = coulomb(padded_pos, padded_charges)
+        padded_dipoles = torch.nn.functional.pad(dipoles, pad=(0,0,0,1))
+        energy = coulomb(padded_pos, padded_charges, padded_dipoles)
         energy.backward()
         f2 = -padded_pos.grad[-1]
         norm1 = torch.linalg.vector_norm(f1)
