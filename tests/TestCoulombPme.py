@@ -3,6 +3,7 @@ import pickle
 import pytest
 from mlipops import NeighborList, CoulombPME
 
+
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_rectangular(device):
     """Test PME on a rectangular box."""
@@ -56,6 +57,7 @@ def test_rectangular(device):
     erecip.backward()
     assert torch.allclose(torch.tensor(expected_drecip), positions.grad.cpu(), rtol=1e-4, atol=1e-5)
 
+
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_triclinic(device):
     """Test PME on a triclinic box."""
@@ -106,6 +108,7 @@ def test_triclinic(device):
     positions.grad.zero_()
     erecip.backward()
     assert torch.allclose(torch.tensor(expected_drecip), positions.grad.cpu(), rtol=1e-4)
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_exclusions(device):
@@ -161,6 +164,54 @@ def test_exclusions(device):
     positions.grad.zero_()
     erecip.backward()
     assert torch.allclose(torch.tensor(expected_drecip), positions.grad.cpu(), rtol=1e-4)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+def test_dipoles(device):
+    """Test Coulomb with dipoles."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    cutoff = 0.5
+    neighbor_list = NeighborList(cutoff, device=device)
+    pme = CoulombPME(neighbor_list, None, 28, 32, 30, 5, 5.0, 138.935, cutoff, 'dipole')
+    pos = [[0.7713206433, 0.02075194936, 0.6336482349],
+           [0.7488038825, 0.4985070123, 0.2247966455],
+           [0.1980628648, 0.7605307122, 0.1691108366],
+           [0.08833981417, 0.6853598184, 0.9533933462],
+           [0.003948266328, 0.5121922634, 0.8126209617],
+           [0.6125260668, 0.7217553174, 0.2918760682],
+           [0.9177741225, 0.7145757834, 0.542544368],
+           [0.1421700476, 0.3733407601, 0.6741336151],
+           [0.4418331744, 0.4340139933, 0.6177669785]]
+    positions = torch.tensor(pos, dtype=torch.float32, requires_grad=True, device=device)
+    charges = torch.tensor([(i-4)*0.1 for i in range(9)], dtype=torch.float32, device=device)
+    dipoles = torch.tensor([[-0.04980356, -0.04964022, 0.0629573],
+                            [-0.04855029, -0.02640511, 0.01638032],
+                            [0.01484668, 0.0209327, -0.01611683],
+                            [0.0081436, -0.06337297, 0.08099023],
+                            [0.10179879, -0.06040448, -0.03472181],
+                            [0.04007862, -0.05791511, 0.08975159],
+                            [0.02838723, -0.02750587, -0.04259318],
+                            [-0.0566733, -0.07421055, 0.00508225],
+                            [0.0467413, -0.04123889, 0.02388442]], dtype=torch.float32, device=device)
+    box_vectors = torch.tensor([[1, 0, 0], [-0.1, 1.2, 0], [0.2, -0.15, 1.1]], dtype=torch.float32, device=device)
+
+    # Compare forces and energies to values computed with OpenMM.
+
+    energy = pme(positions, charges, box_vectors, dipoles=dipoles)
+    assert torch.allclose(torch.tensor(-89.3132262904428), energy, rtol=1e-3)
+    expected_forces = [[113.81919760108624, 296.6104441965564, 128.9728353186539],
+                       [-152.13543337679116, -71.32164524244598, 252.43543323660222],
+                       [-37.22094717568561, -33.78632972234377, 42.20070828269675],
+                       [254.5522531801907, 420.4298696380457, -2.1721181630735344],
+                       [448.8463639257915, 548.8092079882196, 94.70003305947873],
+                       [123.64106541156079, 207.57091036526973, -244.07758199528342],
+                       [42.63052227080138, 126.3149340104367, -241.94305026922234],
+                       [-1018.5373205705725, -1498.5142184607134, -50.31094106504052],
+                       [224.33700096205, 3.428229393838457, 20.043140796737404]]
+    energy.backward()
+    assert torch.allclose(torch.tensor(expected_forces), -positions.grad.cpu(), rtol=5e-3, atol=1e-3)
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_charge_deriv(device):
@@ -222,6 +273,7 @@ def test_charge_deriv(device):
     assert torch.allclose(2.5*ddir, ddir2)
     assert torch.allclose(2.5*drecip, drecip2)
 
+
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_double_derivative(device):
     """Test that asking for a second derivative throws an excepion."""
@@ -246,6 +298,7 @@ def test_double_derivative(device):
         torch.autograd.grad(ddir, charges, retain_graph=True)
     with pytest.raises(Exception):
         torch.autograd.grad(drecip, charges, retain_graph=True)
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('include_direct, include_reciprocal', [(True,False), (False,True), (True,True)])
@@ -276,6 +329,7 @@ def test_compute_field(device, include_direct, include_reciprocal):
         diffnorm = torch.linalg.vector_norm(f1-f2)/norm1
         assert torch.allclose(norm1, norm2, rtol=5e-3)
         assert diffnorm < 5e-3
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):

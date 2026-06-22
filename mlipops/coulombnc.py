@@ -57,11 +57,12 @@ class CoulombNC(torch.nn.Module):
         self.prefactor = prefactor
         self.max_multipole = max_multipole
         if max_multipole == 'charge':
-            self.pairwise = Pairwise(coulomb.point_charge_interaction, None, exclusions)
+            computation = coulomb.point_charge_interaction
         elif max_multipole == 'dipole':
-            self.pairwise = Pairwise(coulomb.dipole_interaction, None, exclusions, requires_deltas=True)
+            computation = coulomb.dipole_interaction
         else:
             raise ValueError(f'Illegal value for max_multipole: {max_multipole}')
+        self.pairwise = Pairwise(computation, None, exclusions)
 
     def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor = None):
         """Compute the interaction.

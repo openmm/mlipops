@@ -151,7 +151,7 @@ class DFTD3Calculator(object):
         self.a2 = a2
         self.bohr_radius = bohr_radius
 
-    def __call__(self, pairs, r, params):
+    def __call__(self, pairs, r, delta, params):
         c6, c8 = params
         r0 = torch.sqrt(c8/c6)
         f = self.a1*r0 + self.a2

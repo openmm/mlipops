@@ -4,8 +4,10 @@ import pytest
 import random
 from mlipops import NeighborList, Pairwise, periodic_displacements
 
-def coulomb(pairs, r, params):
+
+def coulomb(pairs, r, delta, params):
     return params[pairs[:,0]]*params[pairs[:,1]]/r
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('periodic', [True, False])
@@ -34,15 +36,17 @@ def test_coulomb(device, periodic):
     grad = charges.grad
     index = torch.combinations(torch.arange(num_particles, device=device))
     pos = positions[index]
-    distance = torch.linalg.norm(periodic_displacements(pos[:,0]-pos[:,1], box_vectors), dim=-1)
+    delta = periodic_displacements(pos[:,0]-pos[:,1], box_vectors)
+    distance = torch.linalg.norm(delta, dim=-1)
     mask = (distance < cutoff).to(torch.int32)
     positions.grad.zero_()
     charges.grad.zero_()
-    expected_energy = torch.sum(mask*coulomb(index, distance, charges))
+    expected_energy = torch.sum(mask*coulomb(index, distance, delta, charges))
     expected_energy.backward()
     assert torch.allclose(expected_energy, energy, rtol=1e-4)
     assert torch.allclose(-positions.grad, forces, rtol=1e-4)
     assert torch.allclose(charges.grad, grad, rtol=1e-4)
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_exclusions(device):
@@ -64,10 +68,12 @@ def test_exclusions(device):
     expected_energy = 0
     for i in range(num_particles):
         for j in range(i):
-            distance = torch.linalg.norm(positions[i]-positions[j], dim=-1)
+            delta = positions[i]-positions[j]
+            distance = torch.linalg.norm(delta, dim=-1)
             if distance < cutoff and (i, j) not in exclusion_set and (j, i) not in exclusion_set:
-                expected_energy += coulomb(torch.tensor([[i,j]], device=device), distance, charges)
+                expected_energy += coulomb(torch.tensor([[i,j]], device=device), distance, delta, charges)
     assert torch.allclose(expected_energy, energy, rtol=1e-4)
+
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):

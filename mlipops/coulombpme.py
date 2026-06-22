@@ -51,7 +51,7 @@ class CoulombPME(torch.nn.Module):
     hartree, bohr: 1.0
     """
     def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor, gridx: int, gridy: int, gridz: int,
-                 order: int, alpha: float, prefactor: float, cutoff: float | None = None):
+                 order: int, alpha: float, prefactor: float, cutoff: float | None = None, max_multipole='charge'):
         """Create on object for computing Coulomb interactions.
 
         Parameters
@@ -78,6 +78,9 @@ class CoulombPME(torch.nn.Module):
             the cutoff distance used when computing direct space interactions.  If None, the NeighborList's cutoff
             is used.  This argument is useful when a single NeighborList is shared by multiple interactions that use
             different cutoffs.  The value may never be greater than the NeighborList's cutoff.
+        max_multipole: str
+            the maximum multipole order for each particle.  Allowed options are `'charge'` (point charges only) and
+            `'dipole'` (charges and dipoles).
         """
         if neighbor_list.include_self or neighbor_list.include_symmetric:
             raise ValueError('The neighbor list for Coulomb should not include self interactions or symmetric interactions')
@@ -103,8 +106,15 @@ class CoulombPME(torch.nn.Module):
         self.prefactor = prefactor
         self.cutoff = neighbor_list.cutoff if cutoff is None else cutoff
         self.use_triton = has_triton and torch.device(device).type == 'cuda'
-        self.direct = Pairwise(coulomb.ErfcScaledInteraction(coulomb.point_charge_interaction, alpha), self.cutoff, exclusions)
-        self.exclusion_correction = Pairwise(coulomb.ErfScaledInteraction(coulomb.point_charge_interaction, alpha), None)
+        self.max_multipole = max_multipole
+        if max_multipole == 'charge':
+            self.direct = Pairwise(coulomb.ErfcScaledInteraction(coulomb.point_charge_interaction, alpha), self.cutoff, exclusions)
+            self.exclusion_correction = Pairwise(coulomb.ErfScaledInteraction(coulomb.point_charge_interaction, alpha), None)
+        elif max_multipole == 'dipole':
+            self.direct = Pairwise(coulomb.ErfcScaledDipoleInteraction(alpha), self.cutoff, exclusions)
+            self.exclusion_correction = Pairwise(coulomb.ErfScaledInteraction(coulomb.dipole_interaction, alpha), None)
+        else:
+            raise ValueError(f'Illegal value for max_multipole: {max_multipole}')
 
         # Initialize the bspline moduli.
 
@@ -147,7 +157,7 @@ class CoulombPME(torch.nn.Module):
         self.zmoduli = torch.nn.Parameter(moduli[2], requires_grad=False)
 
     def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor, include_direct: bool = True,
-                include_reciprocal: bool = True):
+                include_reciprocal: bool = True, dipoles: torch.Tensor = None):
         """Compute the interaction.
 
         Parameters
@@ -162,6 +172,9 @@ class CoulombPME(torch.nn.Module):
             specifies whether the direct space term should be included in the result
         include_reciprocal: bool
             specifies whether the reciprocal space term should be included in the result
+        dipoles: torch.Tensor | None
+            a Tensor of shape (n_particles, 3) containing the dipole moment of each particle.  If max_multipole is
+            'charge', this is ignored.
 
         Returns
         -------
@@ -170,18 +183,25 @@ class CoulombPME(torch.nn.Module):
         energy = torch.zeros((1,), dtype=torch.float32, device=positions.device)
         if include_direct:
             neighbors = self.neighbor_list(positions, box_vectors)
-            energy += self.direct(positions, charges, neighbors, box_vectors)
+            if self.max_multipole == 'charge':
+                params = charges
+            else:
+                params = (charges, dipoles)
+            energy += self.direct(positions, params, neighbors, box_vectors)
             if self.exclusions is not None:
-                energy -= self.exclusion_correction(positions, charges, self.exclusions, None)
+                energy -= self.exclusion_correction(positions, params, self.exclusions, None)
         if include_reciprocal:
             volume = box_vectors.diag().prod()
             energy -= torch.sum(charges**2)*self.alpha/math.sqrt(torch.pi)
             energy -= 0.5*torch.pi*torch.sum(charges)**2/(volume*self.alpha*self.alpha)
-            energy += ReciprocalFunction.apply(self, positions, charges, box_vectors)
+            if self.max_multipole != 'charge':
+                energy -= (2/3)*torch.sum(dipoles*dipoles)*self.alpha**3/math.sqrt(torch.pi)
+            energy += ReciprocalFunction.apply(self, positions, charges, dipoles, box_vectors)
         return self.prefactor*energy
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
-                      box_vectors: torch.Tensor, include_direct: bool = True, include_reciprocal: bool = True):
+                      box_vectors: torch.Tensor, include_direct: bool = True, include_reciprocal: bool = True,
+                      dipoles: torch.Tensor = None):
         """Compute the electric field produced by the particles at a set of points.
 
         Parameters
@@ -198,6 +218,9 @@ class CoulombPME(torch.nn.Module):
             specifies whether the direct space term should be included in the result
         include_reciprocal: bool
             specifies whether the reciprocal space term should be included in the result
+        dipoles: torch.Tensor | None
+            a Tensor of shape (n_particles, 3) containing the dipole moment of each particle.  If max_multipole is
+            'charge', this is ignored.
 
         Returns
         -------
@@ -213,10 +236,10 @@ class CoulombPME(torch.nn.Module):
         else:
             field = torch.zeros_like(field_positions)
         if include_reciprocal:
-            recip_box_vectors, _, _, _, kz, recip_grid, eterm = reciprocal_forward(self, positions, charges, box_vectors)
-            ti, data, ddata = compute_spline_coefficients(self, field_positions, recip_box_vectors)
+            recip_box_vectors, _, _, _, _, _, recip_grid, eterm, transformed_dipoles = reciprocal_forward(self, positions, charges, dipoles, box_vectors)
             grid_size = (self.gridx, self.gridy, self.gridz)
             grid_size_tensor = torch.tensor(grid_size, device=positions.device)
+            ti, _, data, ddata = compute_spline_coefficients(self, field_positions, recip_box_vectors, grid_size_tensor)
             grid = torch.fft.irfftn(recip_grid*eterm, grid_size, norm='forward')
             num_points = field_positions.shape[0]
             pos_deriv = torch.zeros_like(field_positions)
@@ -229,10 +252,8 @@ class CoulombPME(torch.nn.Module):
         return self.prefactor*field
 
 
-def compute_spline_coefficients(pme: CoulombPME, positions: torch.Tensor, recip_box_vectors: torch.Tensor):
+def compute_spline_coefficients(pme: CoulombPME, positions: torch.Tensor, recip_box_vectors: torch.Tensor, grid_size_tensor: torch.Tensor):
     device = pme.xmoduli.device
-    grid_size = (pme.gridx, pme.gridy, pme.gridz)
-    grid_size_tensor = torch.tensor(grid_size, device=device)
     t = torch.matmul(positions, recip_box_vectors)
     t = (t-torch.floor(t))*grid_size_tensor
     ti = t.to(torch.int32)
@@ -259,26 +280,31 @@ def compute_spline_coefficients(pme: CoulombPME, positions: torch.Tensor, recip_
     for j in range(1, order-1):
         data[order-j-1] = ((dr+j)*data[order-j-2]+(order-j-dr)*data[order-j-1])/(order-1)
     data[0] = (1-dr)*data[0]/(order-1)
-    return ti, data, ddata
+    return ti, dr, data, ddata
 
 
-def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor):
-    recip_box_vectors = torch.linalg.inv(box_vectors)
-    ti, data, ddata = compute_spline_coefficients(pme, positions, recip_box_vectors)
+def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor, box_vectors: torch.Tensor):
     device = pme.xmoduli.device
     grid_size = (pme.gridx, pme.gridy, pme.gridz)
     grid_size_tensor = torch.tensor(grid_size, device=device)
+    recip_box_vectors = torch.linalg.inv(box_vectors)
+    ti, dr, data, ddata = compute_spline_coefficients(pme, positions, recip_box_vectors, grid_size_tensor)
     order = pme.order
     num_particles = positions.shape[0]
 
-    # Spread charges on the grid.
+    # Spread multipoles on the grid.
 
     grid = torch.zeros(grid_size, dtype=torch.float32, device=device)
     if pme.use_triton:
         block_size = triton.next_power_of_2(order*order*order)
         spread_charge_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, data, ti, num_particles, order, block_size)
     else:
-        spread_charge(grid, grid_size_tensor, charges, data, ti, order)
+        if dipoles is None:
+            transformed_dipoles = None
+            spread_charge(grid, grid_size_tensor, charges, data, ti, order)
+        else:
+            transformed_dipoles = torch.matmul(dipoles, recip_box_vectors)*grid_size_tensor
+            spread_dipoles(grid, grid_size_tensor, charges, transformed_dipoles, data, ddata, ti, order)
 
     # Take the Fourier transform, perform the convolution, and calculate the energy.
 
@@ -299,7 +325,7 @@ def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.
     denom = scale_factor*m2*moduli
     eterm = torch.exp(-recip_exp_factor*m2)/denom
     eterm[0,0,0] = 0
-    return recip_box_vectors, ti, data, ddata, kz, recip_grid, eterm
+    return recip_box_vectors, ti, dr, data, ddata, kz, recip_grid, eterm, transformed_dipoles
 
 
 class ReciprocalFunction(torch.autograd.Function):
@@ -307,17 +333,17 @@ class ReciprocalFunction(torch.autograd.Function):
     kernels to make the calculation faster.
     """
     @staticmethod
-    def forward(ctx, pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor):
-        recip_box_vectors, ti, data, ddata, kz, recip_grid, eterm = reciprocal_forward(pme, positions, charges, box_vectors)
+    def forward(ctx, pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor, box_vectors: torch.Tensor):
+        recip_box_vectors, ti, dr, data, ddata, kz, recip_grid, eterm, transformed_dipoles = reciprocal_forward(pme, positions, charges, dipoles, box_vectors)
         scale = ((kz > 0)*(kz <= (pme.gridz-1)/2) + 1)
         energy = torch.sum(scale*eterm*(recip_grid.real*recip_grid.real + recip_grid.imag*recip_grid.imag))
-        ctx.save_for_backward(positions, charges, recip_box_vectors, ti, data, ddata, recip_grid*eterm)
+        ctx.save_for_backward(positions, charges, dipoles, transformed_dipoles, recip_box_vectors, ti, dr, data, ddata, recip_grid*eterm)
         ctx.pme = pme
         return 0.5*energy
 
     @staticmethod
     def backward(ctx, *grad_outputs: torch.Tensor):
-        positions, charges, recip_box_vectors, ti, data, ddata, recip_grid = ctx.saved_tensors
+        positions, charges, dipoles, transformed_dipoles, recip_box_vectors, ti, dr, data, ddata, recip_grid = ctx.saved_tensors
         pme = ctx.pme
         device = pme.xmoduli.device
         grid_size = (pme.gridx, pme.gridy, pme.gridz)
@@ -331,18 +357,29 @@ class ReciprocalFunction(torch.autograd.Function):
         # Compute the derivatives.
 
         num_particles = positions.shape[0]
-        pos_deriv = torch.zeros_like(positions) if ctx.needs_input_grad[1] else None
-        charge_deriv = torch.zeros_like(charges) if ctx.needs_input_grad[2] else None
-        if pme.use_triton:
-            g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
-            interp_derivatives_kernel[g](pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, num_particles, order, 256)
+        dipole_deriv = torch.zeros_like(transformed_dipoles) if ctx.needs_input_grad[3] else None
+        if pme.max_multipole == 'charge':
+            pos_deriv = torch.zeros_like(positions) if ctx.needs_input_grad[1] else None
+            charge_deriv = torch.zeros_like(charges) if ctx.needs_input_grad[2] else None
+            if pme.use_triton:
+                g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
+                interp_derivatives_kernel[g](pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, num_particles, order, 256)
+            else:
+                interp_derivatives(pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, order)
+            if pos_deriv is not None:
+                pos_deriv = grad_outputs[0]*charges.view((-1,1))*torch.matmul(pos_deriv, (grid_size_tensor.view((1,3))*recip_box_vectors).T)
+            if charge_deriv is not None:
+                charge_deriv *= grad_outputs[0]
         else:
-            interp_derivatives(pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, order)
-        if pos_deriv is not None:
-            pos_deriv = grad_outputs[0]*charges.view((-1,1))*torch.matmul(pos_deriv, (grid_size_tensor.view((1,3))*recip_box_vectors).T)
-        if charge_deriv is not None:
-            charge_deriv *= grad_outputs[0]
-        return None, pos_deriv, charge_deriv, None
+            phi = torch.zeros((positions.shape[0], 10), dtype=torch.float32, device=positions.device)
+            interp_dipole_derivatives(phi, grid, grid_size_tensor, data, ddata, ti, dr, order)
+            coord_transform = (grid_size_tensor.view((1,3))*recip_box_vectors).T
+            fx = charges*phi[:,1] + transformed_dipoles[:,0]*phi[:,4] + transformed_dipoles[:,1]*phi[:,7] + transformed_dipoles[:,2]*phi[:,8]
+            fy = charges*phi[:,2] + transformed_dipoles[:,0]*phi[:,7] + transformed_dipoles[:,1]*phi[:,5] + transformed_dipoles[:,2]*phi[:,9]
+            fz = charges*phi[:,3] + transformed_dipoles[:,0]*phi[:,8] + transformed_dipoles[:,1]*phi[:,9] + transformed_dipoles[:,2]*phi[:,6]
+            pos_deriv = grad_outputs[0]*torch.matmul(torch.stack([fx, fy, fz], dim=1), coord_transform)
+            charge_deriv = phi[:,0]*grad_outputs[0] if ctx.needs_input_grad[2] else None
+        return None, pos_deriv, charge_deriv, dipole_deriv, None
 
 
 def spread_charge(grid: torch.Tensor, grid_size_tensor: torch.Tensor, charges: torch.Tensor,
@@ -354,6 +391,22 @@ def spread_charge(grid: torch.Tensor, grid_size_tensor: torch.Tensor, charges: t
             for iz in range(order):
                 zindex = (ti[:,2]+iz) % grid_size_tensor[2]
                 values = charges*data[ix,:,0]*data[iy,:,1]*data[iz,:,2]
+                grid.index_put_((xindex, yindex, zindex), values, accumulate=True)
+    return grid
+
+
+def spread_dipoles(grid: torch.Tensor, grid_size_tensor: torch.Tensor, charges: torch.Tensor,
+                   dipoles: torch.Tensor, data: torch.Tensor, ddata: torch.Tensor, ti: torch.Tensor, order: int):
+    for ix in range(order):
+        xindex = (ti[:,0]+ix) % grid_size_tensor[0]
+        for iy in range(order):
+            yindex = (ti[:,1]+iy) % grid_size_tensor[1]
+            for iz in range(order):
+                zindex = (ti[:,2]+iz) % grid_size_tensor[2]
+                values = charges*data[ix,:,0]*data[iy,:,1]*data[iz,:,2] + \
+                         dipoles[:,0]*ddata[ix,:,0]*data[iy,:,1]*data[iz,:,2] + \
+                         dipoles[:,1]*data[ix,:,0]*ddata[iy,:,1]*data[iz,:,2] + \
+                         dipoles[:,2]*data[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]
                 grid.index_put_((xindex, yindex, zindex), values, accumulate=True)
     return grid
 
@@ -374,3 +427,41 @@ def interp_derivatives(pos_deriv: torch.Tensor | None, charge_deriv: torch.Tenso
                     pos_deriv[:,2] += data[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]*g
                 if charge_deriv is not None:
                     charge_deriv += data[ix,:,0]*data[iy,:,1]*data[iz,:,2]*g
+
+
+def interp_dipole_derivatives(phi: torch.Tensor, grid: torch.Tensor, grid_size_tensor: torch.Tensor, data: torch.Tensor,
+                              ddata: torch.Tensor, ti: torch.Tensor, dr: torch.Tensor, order: int):
+    # Compute the second derivative of the spline.
+
+    d2data = torch.zeros_like(ddata)
+    d2data[2] = 0.5*dr*dr
+    d2data[1] = 0.5*((1.0+dr)*(1.0-dr)+(2.0-dr)*dr)
+    d2data[0] = 0.5*(1.0-dr)*(1.0-dr)
+    d2data[order-2] = d2data[order-3]
+    for i in range(order-3, 0, -1):
+        d2data[i] = d2data[i-1] - d2data[i]
+    d2data[0] = -d2data[0]
+    d2data[order-1] = d2data[order-2]
+    for i in range(order-2, 0, -1):
+        d2data[i] = d2data[i-1] - d2data[i]
+    d2data[0] = -d2data[0]
+
+    # Compute the derivatives.
+
+    for ix in range(order):
+        xindex = (ti[:,0]+ix) % grid_size_tensor[0]
+        for iy in range(order):
+            yindex = (ti[:,1]+iy) % grid_size_tensor[1]
+            for iz in range(order):
+                zindex = (ti[:,2]+iz) % grid_size_tensor[2]
+                g = grid[xindex, yindex, zindex]
+                phi[:,0] += g*data[ix,:,0]*data[iy,:,1]*data[iz,:,2]
+                phi[:,1] += g*ddata[ix,:,0]*data[iy,:,1]*data[iz,:,2]
+                phi[:,2] += g*data[ix,:,0]*ddata[iy,:,1]*data[iz,:,2]
+                phi[:,3] += g*data[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]
+                phi[:,4] += g*d2data[ix,:,0]*data[iy,:,1]*data[iz,:,2]
+                phi[:,5] += g*data[ix,:,0]*d2data[iy,:,1]*data[iz,:,2]
+                phi[:,6] += g*data[ix,:,0]*data[iy,:,1]*d2data[iz,:,2]
+                phi[:,7] += g*ddata[ix,:,0]*ddata[iy,:,1]*data[iz,:,2]
+                phi[:,8] += g*ddata[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]
+                phi[:,9] += g*data[ix,:,0]*ddata[iy,:,1]*ddata[iz,:,2]

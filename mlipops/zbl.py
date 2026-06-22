@@ -83,7 +83,7 @@ class ZBLCalculator(object):
     def __init__(self, bohr_radius: float):
         self.bohr_radius = bohr_radius
 
-    def __call__(self, pairs, r, params):
+    def __call__(self, pairs, r, delta, params):
         atomic_numbers, radii = params
         z = atomic_numbers[pairs]
         a = 0.8854*self.bohr_radius/torch.sum(z**0.23, dim=1)
