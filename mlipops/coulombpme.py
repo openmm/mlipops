@@ -15,10 +15,14 @@ except ImportError:
 class CoulombPME(torch.nn.Module):
     """Compute Coulomb interactions using the Particle Mesh Ewald method.
 
-    This class computes the energy of an infinite set of charges repeating periodically through space.  The interaction
-    is divided into a short range part, which is computed in direct space, and a long range part, which is computed
-    in reciprocal space.  The division between the two is set by a parameter `alpha`, which can be adjusted to
+    This class computes the energy of an infinite set of multipoles repeating periodically through space.  The
+    interaction is divided into a short range part, which is computed in direct space, and a long range part, which is
+    computed in reciprocal space.  The division between the two is set by a parameter `alpha`, which can be adjusted to
     minimize the total cost of computing both parts.
+
+    By default, the multipoles are simply point charges.  You can also include dipoles by passing
+    `max_multipole='dipole'` to the constructor.  In that case, you must provide dipole moments along with charges when
+    invoking the module.
 
     You can optionally specify that certain interactions should be omitted when computing the energy.  This is typically
     used for nearby atoms within the same molecule.  When two atoms are listed as an exclusion, only the interaction of
@@ -30,8 +34,8 @@ class CoulombPME(torch.nn.Module):
     included in reciprocal space.  The sum of the two terms thus yields the correct energy with the interaction fully
     excluded.
 
-    When performing backpropagation, this class computes derivatives with respect to atomic positions and charges, but
-    not to any other parameters (box vectors, alpha, etc.).  In addition, it only computes first derivatives.
+    When performing backpropagation, this class computes derivatives with respect to positions, charges, and dipoles,
+    but not to any other parameters (box vectors, alpha, etc.).  In addition, it only computes first derivatives.
     Attempting to compute a second derivative will throw an exception.  This means that if you use PME during training,
     the loss function can only depend on energy, not forces.
 
@@ -112,7 +116,7 @@ class CoulombPME(torch.nn.Module):
             self.exclusion_correction = Pairwise(coulomb.ErfScaledInteraction(coulomb.point_charge_interaction, alpha), None)
         elif max_multipole == 'dipole':
             self.direct = Pairwise(coulomb.ErfcScaledDipoleInteraction(alpha), self.cutoff, exclusions)
-            self.exclusion_correction = Pairwise(coulomb.ErfScaledInteraction(coulomb.dipole_interaction, alpha), None)
+            self.exclusion_correction = Pairwise(coulomb.ErfScaledDipoleInteraction(alpha), None)
         else:
             raise ValueError(f'Illegal value for max_multipole: {max_multipole}')
 
@@ -229,8 +233,17 @@ class CoulombPME(torch.nn.Module):
         if include_direct:
             delta = periodic_displacements(field_positions.view((-1,1,3))-positions, box_vectors)
             r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
-            z = self.alpha*r
-            field = charges.unsqueeze(1)*delta*(self.alpha*(2/math.sqrt(math.pi))*torch.exp(-z**2)/r**2 + torch.erfc(z)/r**3)
+            temp1 = 2*self.alpha/math.sqrt(math.pi)
+            temp2 = 4*self.alpha**3/math.sqrt(math.pi)
+            alphar = self.alpha*r
+            rinv2 = r**-2
+            expfactor = torch.exp(-alphar**2)
+            b0 = torch.erfc(alphar)/r
+            b1 = rinv2*(b0 + temp1*expfactor)
+            b2 = rinv2*(3*b1 + temp2*expfactor)
+            field = charges.unsqueeze(1)*delta*b1
+            if self.max_multipole != 'charge':
+                field += -b1*dipoles + b2*(dipoles.unsqueeze(0)*delta).sum(axis=2, keepdim=True)*delta
             field = torch.where((r > 0)*(r < self.cutoff), field, 0)
             field = field.sum(dim=1)
         else:
@@ -357,17 +370,18 @@ class ReciprocalFunction(torch.autograd.Function):
         # Compute the derivatives.
 
         num_particles = positions.shape[0]
-        dipole_deriv = torch.zeros_like(transformed_dipoles) if ctx.needs_input_grad[3] else None
         if pme.max_multipole == 'charge':
             pos_deriv = torch.zeros_like(positions) if ctx.needs_input_grad[1] else None
             charge_deriv = torch.zeros_like(charges) if ctx.needs_input_grad[2] else None
+            dipole_deriv = None
             if pme.use_triton:
                 g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
                 interp_derivatives_kernel[g](pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, num_particles, order, 256)
             else:
                 interp_derivatives(pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, order)
             if pos_deriv is not None:
-                pos_deriv = grad_outputs[0]*charges.view((-1,1))*torch.matmul(pos_deriv, (grid_size_tensor.view((1,3))*recip_box_vectors).T)
+                coord_transform = (grid_size_tensor.view((1,3))*recip_box_vectors).T
+                pos_deriv = grad_outputs[0]*charges.view((-1,1))*torch.matmul(pos_deriv, coord_transform)
             if charge_deriv is not None:
                 charge_deriv *= grad_outputs[0]
         else:
@@ -379,6 +393,7 @@ class ReciprocalFunction(torch.autograd.Function):
             fz = charges*phi[:,3] + transformed_dipoles[:,0]*phi[:,8] + transformed_dipoles[:,1]*phi[:,9] + transformed_dipoles[:,2]*phi[:,6]
             pos_deriv = grad_outputs[0]*torch.matmul(torch.stack([fx, fy, fz], dim=1), coord_transform)
             charge_deriv = phi[:,0]*grad_outputs[0] if ctx.needs_input_grad[2] else None
+            dipole_deriv = grad_outputs[0]*torch.matmul(phi[:,1:4], coord_transform) if ctx.needs_input_grad[3] else None
         return None, pos_deriv, charge_deriv, dipole_deriv, None
 
 
@@ -421,12 +436,12 @@ def interp_derivatives(pos_deriv: torch.Tensor | None, charge_deriv: torch.Tenso
             for iz in range(order):
                 zindex = (ti[:,2]+iz) % grid_size_tensor[2]
                 g = grid[xindex, yindex, zindex]
+                if charge_deriv is not None:
+                    charge_deriv += data[ix,:,0]*data[iy,:,1]*data[iz,:,2]*g
                 if pos_deriv is not None:
                     pos_deriv[:,0] += ddata[ix,:,0]*data[iy,:,1]*data[iz,:,2]*g
                     pos_deriv[:,1] += data[ix,:,0]*ddata[iy,:,1]*data[iz,:,2]*g
                     pos_deriv[:,2] += data[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]*g
-                if charge_deriv is not None:
-                    charge_deriv += data[ix,:,0]*data[iy,:,1]*data[iz,:,2]*g
 
 
 def interp_dipole_derivatives(phi: torch.Tensor, grid: torch.Tensor, grid_size_tensor: torch.Tensor, data: torch.Tensor,

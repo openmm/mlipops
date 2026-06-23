@@ -92,3 +92,40 @@ class ErfcScaledDipoleInteraction(object):
         g1 = c2*d1delta - c1*d2delta + (d1*d2).sum(axis=1)
         g2 = -d1delta*d2delta
         return (b0*g0 + b1*g1 + b2*g2)
+
+
+class ErfScaledDipoleInteraction(object):
+    """Compute the Coulomb interaction between multipoles, each having a charge and dipole moment, with the strength
+    scaled by erf(alpha*r).  This corresponds to the reciprocal space part of Ewald summation.  This is a callable object
+    designed for use with Pairwise."""
+    def __init__(self, alpha: float):
+        self.alpha = alpha
+        self.temp1 = 2*alpha/math.sqrt(math.pi)
+        self.temp2 = 4*alpha**3/math.sqrt(math.pi)
+
+    def __call__(self, pairs, r, delta, params):
+        # This calculation is identical to the one for ErfcScaledDipoleInteraction above, except that erfc() and its
+        # derivative are replaced by erf().
+
+        charge, dipole = params
+        p1 = pairs[:,0]
+        p2 = pairs[:,1]
+        c1 = charge[p1]
+        c2 = charge[p2]
+        d1 = dipole[p1]
+        d2 = dipole[p2]
+        d1delta = (d1*delta).sum(axis=1)
+        d2delta = (d2*delta).sum(axis=1)
+        alphar = self.alpha*r
+        rinv2 = r**-2
+        expfactor = -torch.exp(-alphar**2)
+
+        # See equations 2.8 and 2.10 of https://doi.org/10.1063/1.1324708.
+
+        b0 = torch.erf(alphar)/r
+        b1 = rinv2*(b0 + self.temp1*expfactor)
+        b2 = rinv2*(3*b1 + self.temp2*expfactor)
+        g0 = c1*c2
+        g1 = c2*d1delta - c1*d2delta + (d1*d2).sum(axis=1)
+        g2 = -d1delta*d2delta
+        return (b0*g0 + b1*g1 + b2*g2)
