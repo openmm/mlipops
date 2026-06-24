@@ -80,8 +80,9 @@ class DisplacementFunction(torch.autograd.Function):
     def backward(ctx, *grad_outputs: torch.Tensor):
         positions, pairs = ctx.saved_tensors
         result = torch.zeros_like(positions)
-        g = lambda meta: (triton.cdiv(positions.shape[0], meta['BLOCK_SIZE']),)
+        g = lambda meta: (triton.cdiv(pairs.shape[0], meta['BLOCK_SIZE']),)
         backprop_delta_kernel[g](result, grad_outputs[0], pairs, pairs.shape[0], 256)
+
         return result, None, None
 
 
