@@ -6,7 +6,7 @@ from .pairwise import Pairwise
 from .utils import periodic_displacements
 try:
     import triton
-    from .pme_triton import spread_charge_kernel, interp_derivatives_kernel
+    from .pme_triton import spread_charge_kernel, spread_dipoles_kernel, interp_derivatives_kernel, interp_dipoles_kernel
     has_triton = True
 except ImportError:
     has_triton = False
@@ -310,7 +310,13 @@ def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.
     grid = torch.zeros(grid_size, dtype=torch.float32, device=device)
     if pme.use_triton:
         block_size = triton.next_power_of_2(order*order*order)
-        spread_charge_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, data, ti, num_particles, order, block_size)
+        if dipoles is None:
+            transformed_dipoles = None
+            spread_charge_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, data, ti, num_particles, order, block_size)
+        else:
+            transformed_dipoles = torch.matmul(dipoles, recip_box_vectors)*grid_size_tensor
+            spread_dipoles_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, transformed_dipoles,
+                                                              data, ddata, ti, num_particles, order, block_size)
     else:
         if dipoles is None:
             transformed_dipoles = None
@@ -386,7 +392,7 @@ class ReciprocalFunction(torch.autograd.Function):
                 charge_deriv *= grad_outputs[0]
         else:
             phi = torch.zeros((positions.shape[0], 10), dtype=torch.float32, device=positions.device)
-            interp_dipole_derivatives(phi, grid, grid_size_tensor, data, ddata, ti, dr, order)
+            interp_dipole_derivatives(phi, grid, grid_size_tensor, data, ddata, ti, dr, order, pme.use_triton)
             coord_transform = (grid_size_tensor.view((1,3))*recip_box_vectors).T
             fx = charges*phi[:,1] + transformed_dipoles[:,0]*phi[:,4] + transformed_dipoles[:,1]*phi[:,7] + transformed_dipoles[:,2]*phi[:,8]
             fy = charges*phi[:,2] + transformed_dipoles[:,0]*phi[:,7] + transformed_dipoles[:,1]*phi[:,5] + transformed_dipoles[:,2]*phi[:,9]
@@ -445,7 +451,7 @@ def interp_derivatives(pos_deriv: torch.Tensor | None, charge_deriv: torch.Tenso
 
 
 def interp_dipole_derivatives(phi: torch.Tensor, grid: torch.Tensor, grid_size_tensor: torch.Tensor, data: torch.Tensor,
-                              ddata: torch.Tensor, ti: torch.Tensor, dr: torch.Tensor, order: int):
+                              ddata: torch.Tensor, ti: torch.Tensor, dr: torch.Tensor, order: int, use_triton: bool):
     # Compute the second derivative of the spline.
 
     d2data = torch.zeros_like(ddata)
@@ -463,20 +469,25 @@ def interp_dipole_derivatives(phi: torch.Tensor, grid: torch.Tensor, grid_size_t
 
     # Compute the derivatives.
 
-    for ix in range(order):
-        xindex = (ti[:,0]+ix) % grid_size_tensor[0]
-        for iy in range(order):
-            yindex = (ti[:,1]+iy) % grid_size_tensor[1]
-            for iz in range(order):
-                zindex = (ti[:,2]+iz) % grid_size_tensor[2]
-                g = grid[xindex, yindex, zindex]
-                phi[:,0] += g*data[ix,:,0]*data[iy,:,1]*data[iz,:,2]
-                phi[:,1] += g*ddata[ix,:,0]*data[iy,:,1]*data[iz,:,2]
-                phi[:,2] += g*data[ix,:,0]*ddata[iy,:,1]*data[iz,:,2]
-                phi[:,3] += g*data[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]
-                phi[:,4] += g*d2data[ix,:,0]*data[iy,:,1]*data[iz,:,2]
-                phi[:,5] += g*data[ix,:,0]*d2data[iy,:,1]*data[iz,:,2]
-                phi[:,6] += g*data[ix,:,0]*data[iy,:,1]*d2data[iz,:,2]
-                phi[:,7] += g*ddata[ix,:,0]*ddata[iy,:,1]*data[iz,:,2]
-                phi[:,8] += g*ddata[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]
-                phi[:,9] += g*data[ix,:,0]*ddata[iy,:,1]*ddata[iz,:,2]
+    if use_triton:
+        num_particles = phi.shape[0]
+        g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
+        interp_dipoles_kernel[g](phi, grid, grid_size_tensor, data, ddata, d2data, ti, num_particles, order, 256)
+    else:
+        for ix in range(order):
+            xindex = (ti[:,0]+ix) % grid_size_tensor[0]
+            for iy in range(order):
+                yindex = (ti[:,1]+iy) % grid_size_tensor[1]
+                for iz in range(order):
+                    zindex = (ti[:,2]+iz) % grid_size_tensor[2]
+                    g = grid[xindex, yindex, zindex]
+                    phi[:,0] += g*data[ix,:,0]*data[iy,:,1]*data[iz,:,2]
+                    phi[:,1] += g*ddata[ix,:,0]*data[iy,:,1]*data[iz,:,2]
+                    phi[:,2] += g*data[ix,:,0]*ddata[iy,:,1]*data[iz,:,2]
+                    phi[:,3] += g*data[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]
+                    phi[:,4] += g*d2data[ix,:,0]*data[iy,:,1]*data[iz,:,2]
+                    phi[:,5] += g*data[ix,:,0]*d2data[iy,:,1]*data[iz,:,2]
+                    phi[:,6] += g*data[ix,:,0]*data[iy,:,1]*d2data[iz,:,2]
+                    phi[:,7] += g*ddata[ix,:,0]*ddata[iy,:,1]*data[iz,:,2]
+                    phi[:,8] += g*ddata[ix,:,0]*data[iy,:,1]*ddata[iz,:,2]
+                    phi[:,9] += g*data[ix,:,0]*ddata[iy,:,1]*ddata[iz,:,2]
