@@ -1,5 +1,5 @@
 import torch
-from .utils import periodic_displacements
+from .utils import periodic_displacements, batch_pairwise_displacements
 try:
     import triton
     from .neighborlist_triton import find_sort_keys_kernel, find_neighbors_kernel
@@ -63,6 +63,7 @@ class NeighborList(torch.nn.Module):
         self._prev_num_particles = None
         self._prev_positions = None
         self._prev_box_vectors = None
+        self._prev_batch = None
 
     @property
     def cutoff(self):
@@ -80,7 +81,7 @@ class NeighborList(torch.nn.Module):
     def padding(self):
         return self._padding
 
-    def forward(self, positions: torch.Tensor, box_vectors: torch.Tensor | None):
+    def forward(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the neighbor list.
 
         Parameters
@@ -88,39 +89,34 @@ class NeighborList(torch.nn.Module):
         positions: torch.Tensor
             a Tensor of shape (particles, 3) containing the cartesian coordinates of each particle
         box_vectors: torch.Tensor | None
-            a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
-            conditions are not used.
+            if batch is None, a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If batch is
+            not None, a Tensor of shape (systems, 3, 3) containing the box vectors for each system.  If None, periodic
+            boundary conditions are not used.
+        batch: torch.Tensor | None
+            a Tensor of shape (particles,) containing the index of the system each particle belongs to.  This must be
+            sorted in ascending order, and every system must contain at least one particle.  If None, the neighbor list
+            is computed for a single system instead of a batch of systems.
 
         Returns
         -------
         a Tensor of shape (pairs, 2).  Each row contains the indices of two particles that can interact.
         """
-        if self._cutoff is None:
+        if self._cutoff is None and batch is None:
             # Since we're returning all possible pairs, it mostly doesn't change from one call to the next.
             # We can just return the same value every time.  The one thing we need to check for is that the
             # number of particles hasn't changed.
 
             num_particles = positions.shape[0]
             if self._prev_pairs is None or num_particles != self._prev_num_particles:
-                i = torch.arange(num_particles, device=positions.device)
-                if self._include_self:
-                    if self._include_symmetric:
-                        self._prev_pairs = torch.cartesian_prod(i, i)
-                    else:
-                        self._prev_pairs = torch.combinations(i, with_replacement=True)
-                else:
-                    if self._include_symmetric:
-                        pairs = torch.combinations(i)
-                        self._prev_pairs = torch.cat([pairs, pairs.flip(1)])
-                    else:
-                        self._prev_pairs = torch.combinations(i)
+                self._prev_pairs = self._compute_dense_pairs(num_particles, 0)
                 self._prev_num_particles = num_particles
+            self._prev_batch = batch
             return self._prev_pairs
 
         # See if we have cached neighbors that are still valid.
 
-        if self._prev_pairs is not None and ((self._prev_box_vectors is box_vectors) or
-                                             (self._prev_box_vectors is not None and box_vectors is not None and box_vectors.equal(self._prev_box_vectors))):
+        if self._prev_pairs is not None and self._prev_batch is batch and ((self._prev_box_vectors is box_vectors) or
+                     (self._prev_box_vectors is not None and box_vectors is not None and box_vectors.equal(self._prev_box_vectors))):
             if positions is self._prev_positions:
                 # The positions are exactly the same as before.
 
@@ -138,23 +134,43 @@ class NeighborList(torch.nn.Module):
         cutoff = self._cutoff
         if self._padding is not None:
             cutoff += self._padding
-        if self.use_triton and positions.shape[0] > 1000:
-            result = self._compute_large(positions, box_vectors, cutoff)
-            if result is None:
-                # Try again with a larger output buffer.
+        if batch is None:
+            if self.use_triton and positions.shape[0] > 1000:
+                result = self._compute_large_single(positions, box_vectors, cutoff)
+                if result is None:
+                    # Try again with a larger output buffer.
 
-                result = self._compute_large(positions, box_vectors, cutoff)
+                    result = self._compute_large_single(positions, box_vectors, cutoff)
+            else:
+                result = self._compute_small_single(positions, box_vectors, cutoff)
         else:
-            result = self._compute_small(positions, box_vectors, cutoff)
+            result = self._compute_small_batch(positions, box_vectors, cutoff, batch)
 
         # Cache the result for future use.
 
         self._prev_positions = positions
         self._prev_box_vectors = box_vectors
         self._prev_pairs = result
+        self._prev_batch = batch
         return result
 
-    def _compute_small(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float):
+    def _compute_dense_pairs(self, num_particles: int | torch.Tensor, start_index: int | torch.Tensor) -> torch.Tensor:
+        """Build a list of the full set of all possible pairs between a set of particles.
+        """
+        i = torch.arange(start_index, num_particles+start_index, device=self.device)
+        if self._include_self:
+            if self._include_symmetric:
+                return torch.cartesian_prod(i, i)
+            else:
+                return torch.combinations(i, with_replacement=True)
+        else:
+            if self._include_symmetric:
+                pairs = torch.combinations(i)
+                return torch.cat([pairs, pairs.flip(1)])
+            else:
+                return torch.combinations(i)
+
+    def _compute_small_single(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float) -> torch.Tensor:
         """This implements a brute force algorithm to identify neighbors by testing all possible pairs.  It is
         fast for small numbers of particles but scales as O(n^2), making it less suitable for larger systems.
         """
@@ -181,7 +197,7 @@ class NeighborList(torch.nn.Module):
         indices = torch.cat((i.view((-1, 1, 1)).expand((n, n, 1)), i.view((1, -1, 1)).expand((n, n, 1))), axis=2)
         return indices[mask]
 
-    def _compute_large(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float):
+    def _compute_large_single(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float) -> torch.Tensor:
         """This implements a more complex algorithm for identifying neighbors.  On small systems it is slower than
         _compute_small(), but it becomes much faster as the number of particles grows.  It requires Triton, and
         therefore is only used on GPUs.
@@ -240,3 +256,29 @@ class NeighborList(torch.nn.Module):
             return None
         output = output.narrow(0, 0, output_counter)
         return output
+
+    def _compute_small_batch(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float,
+                             batch: torch.Tensor) -> torch.Tensor:
+        """This implements a brute force algorithm to identify neighbors by testing all possible pairs within each
+        system.  It is fast for small numbers of particles but scales as O(n^2), making it less suitable for larger
+        systems.
+        """
+        # Identify the range of particles for each system.
+
+        index = (batch[:-1] != batch[1:]).nonzero().flatten()
+        start_index = torch.nn.functional.pad(index+1, pad=(1,0))
+        system_particles = torch.nn.functional.pad(start_index[1:], pad=(0,1), value=batch.shape[0]) - start_index
+
+        # Build a list of all possible pairs.
+
+        num_systems = start_index.shape[0]
+        system_pairs = []
+        for i in range(num_systems):
+            system_pairs.append(self._compute_dense_pairs(system_particles[i], start_index[i]))
+        all_pairs = torch.cat(system_pairs)
+
+        # Filter them by distance.
+
+        delta = batch_pairwise_displacements(positions, all_pairs, batch, box_vectors)
+        distance = torch.linalg.vector_norm(delta, dim=1)
+        return all_pairs[distance < cutoff]
