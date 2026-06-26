@@ -64,7 +64,8 @@ class CoulombNC(torch.nn.Module):
             raise ValueError(f'Illegal value for max_multipole: {max_multipole}')
         self.pairwise = Pairwise(computation, None, exclusions)
 
-    def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor = None):
+    def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor = None,
+                batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters
@@ -76,21 +77,26 @@ class CoulombNC(torch.nn.Module):
         dipoles: torch.Tensor | None
             a Tensor of shape (n_particles, 3) containing the dipole moment of each particle.  If max_multipole is
             'charge', this is ignored.
+        batch: torch.Tensor | None
+            a Tensor of shape (n_particles,) containing the index of the system each particle belongs to.  This must be
+            sorted in ascending order, and every system must contain at least one particle.  If None, the interaction
+            is computed for a single system instead of a batch of systems.
 
         Returns
         -------
-        a torch.Tensor containing the energy of the interaction
+        a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
+        total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        neighbors = self.neighbor_list(positions, None)
+        neighbors = self.neighbor_list(positions, None, batch)
         if self.max_multipole == 'charge':
             params = charges
         else:
             params = (charges, dipoles)
-        energy = self.pairwise(positions, params, neighbors, None)
+        energy = self.pairwise(positions, params, neighbors, None, batch)
         return self.prefactor*energy
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
-                      dipoles: torch.Tensor = None):
+                      dipoles: torch.Tensor = None) -> torch.Tensor:
         """Compute the electric field produced by the particles at a set of points.
 
         Parameters

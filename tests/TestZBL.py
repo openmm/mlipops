@@ -1,7 +1,7 @@
 import torch
 import pickle
 import pytest
-from mlipops import NeighborList, ZBL
+from mlipops import NeighborList, ZBL, get_covalent_radii
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -72,6 +72,49 @@ def test_cutoff(device):
             assert torch.allclose(torch.tensor(0.0), energy2)
         else:
             assert torch.allclose(energy1*0.5*(torch.cos(torch.tensor(torch.pi*d/1.7, device=device))+1), energy2)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('periodic', [True, False])
+def test_batch(device, periodic):
+    """Test ZBL for a batch of systems."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_systems = 10
+    num_particles = 20*num_systems
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    positions.requires_grad_()
+    numbers = torch.randint(5, 10, (num_particles,))
+    radii = get_covalent_radii(numbers, 0.052917721)
+    batch = torch.arange(num_systems, device=device).expand((20,-1)).T.flatten()
+    if periodic:
+        box_vectors = []
+        for i in range(num_systems):
+            scale = 0.9+0.2*torch.rand(1, dtype=torch.float32, device=device)
+            box_vectors.append(torch.tensor([[2.0, 0.0, 0.0],
+                                             [0.1, 1.6, 0.0],
+                                             [0.2, 0.1, 1.5]], dtype=torch.float32, device=device)*scale)
+        box_vectors = torch.stack(box_vectors)
+    else:
+        box_vectors = None
+    cutoff = 0.4
+    neighbor_list = NeighborList(cutoff, device=device)
+    zbl = ZBL(neighbor_list, 138.935, 0.052917721)
+    energy = zbl(positions, numbers, radii, box_vectors, batch)
+    for i in range(num_systems):
+        mask = batch == i
+        energy1 = energy[i]
+        energy1.backward(retain_graph=True)
+        grad1 = positions.grad[mask]
+        pos = torch.tensor(positions[mask], device=device, requires_grad=True)
+        box = None if box_vectors is None else box_vectors[i]
+        energy2 = zbl(pos, numbers[mask], radii[mask], box)
+        assert torch.allclose(energy1, energy2)
+        energy2.backward()
+        grad2 = pos.grad
+        assert torch.allclose(grad1, grad2)
+        positions.grad.zero_()
+        pos.grad.zero_()
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])

@@ -123,6 +123,34 @@ def test_dipoles(device):
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
+def test_batch(device):
+    """Test Coulomb for a batch of systems."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_systems = 10
+    num_particles = 20*num_systems
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    positions.requires_grad_()
+    charges = 2.0*torch.rand(num_particles, dtype=torch.float32, device=device)-1.0
+    batch = torch.arange(num_systems, device=device).expand((20,-1)).T.flatten()
+    coulomb = CoulombNC(None, 138.935)
+    energy = coulomb(positions, charges, batch=batch)
+    for i in range(num_systems):
+        mask = batch == i
+        energy1 = energy[i]
+        energy1.backward(retain_graph=True)
+        grad1 = positions.grad[mask]
+        pos = torch.tensor(positions[mask], device=device, requires_grad=True)
+        energy2 = coulomb(pos, charges[mask])
+        assert torch.allclose(energy1, energy2)
+        energy2.backward()
+        grad2 = pos.grad
+        assert torch.allclose(grad1, grad2)
+        positions.grad.zero_()
+        pos.grad.zero_()
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('max_multipole', ['charge', 'dipole'])
 def test_compute_field(device, max_multipole):
     """Test computing the electric field."""

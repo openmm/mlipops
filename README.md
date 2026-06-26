@@ -27,8 +27,12 @@ PyPI packages will be coming once the code matures a little more.
 These are the currently implemented features.  Many more are planned.  Expect this list to grow quickly.
 
 - Neighbor list construction
-- Coulomb interactions with Particle Mesh Ewald and Reaction Field
+- Coulomb interactions
+  - No cutoff: charges and dipoles, non-periodic systems
+  - Reaction field: charges only, periodic and non-periodic systems
+  - Particle Mesh Ewald: charges and dipoles, periodic systems
 - Ziegler-Biersack-Littmark (ZBL) potential
 - DFT-D3(BJ) dispersion
 - Arbitrary pairwise potentials
+- Batch computation
 - Periodic boundary conditions with triclinic boxes

@@ -139,7 +139,6 @@ class DisplacementFunction(torch.autograd.Function):
         result = torch.zeros_like(positions)
         g = lambda meta: (triton.cdiv(pairs.shape[0], meta['BLOCK_SIZE']),)
         backprop_delta_kernel[g](result, grad_outputs[0], pairs, pairs.shape[0], 256)
-
         return result, None, None
 
 

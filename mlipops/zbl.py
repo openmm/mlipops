@@ -52,7 +52,7 @@ class ZBL(torch.nn.Module):
         self.pairwise = Pairwise(ZBLCalculator(bohr_radius), None, None)
 
     def forward(self, positions: torch.Tensor, atomic_numbers: torch.Tensor, radii: torch.Tensor | None,
-                box_vectors: torch.Tensor):
+                box_vectors: torch.Tensor, batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters
@@ -64,16 +64,22 @@ class ZBL(torch.nn.Module):
         radii: torch.Tensor | None
             a Tensor of shape (n_particles,) containing the covalent radius of each particle.  If None, the cutoff
             function is omitted.
-        box_vectors: torch.Tensor
-            a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
-            conditions are not used.
+        box_vectors: torch.Tensor | None
+            if batch is None, a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If batch is
+            not None, a Tensor of shape (n_systems, 3, 3) containing the box vectors for each system.  If None, periodic
+            boundary conditions are not used.
+        batch: torch.Tensor | None
+            a Tensor of shape (n_particles,) containing the index of the system each particle belongs to.  This must be
+            sorted in ascending order, and every system must contain at least one particle.  If None, the interaction
+            is computed for a single system instead of a batch of systems.
 
         Returns
         -------
-        a torch.Tensor containing the energy of the interaction
+        a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
+        total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        neighbors = self.neighbor_list(positions, box_vectors)
-        energy = self.pairwise(positions, (atomic_numbers, radii), neighbors, box_vectors)
+        neighbors = self.neighbor_list(positions, box_vectors, batch)
+        energy = self.pairwise(positions, (atomic_numbers, radii), neighbors, box_vectors, batch)
         return self.prefactor*energy
 
 

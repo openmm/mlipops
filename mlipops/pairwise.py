@@ -112,13 +112,12 @@ class Pairwise(torch.nn.Module):
                 padding = positions.shape[0] - self.exclusion_indices.shape[0]
                 self.exclusion_indices = torch.nn.functional.pad(self.exclusion_indices, pad=(0,0,0,padding), value=-1)
             masks.append(~torch.any(self.exclusion_indices[pairs[:,0]] == pairs[:,1].reshape((-1,1)), dim=1))
-        if len(masks) == 0:
-            return torch.sum(energy)
-        if len(masks) == 1:
-            mask = masks[0]
-        else:
-            mask = masks[0]*masks[1]
-        energy = torch.where(mask, energy, 0.0)
+        if len(masks) > 0:
+            if len(masks) == 1:
+                mask = masks[0]
+            else:
+                mask = masks[0]*masks[1]
+            energy = torch.where(mask, energy, 0.0)
         if batch is None:
             return torch.sum(energy)
         result = torch.zeros((batch.max()+1,), dtype=torch.float32, device=positions.device)

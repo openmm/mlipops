@@ -2,7 +2,7 @@ import torch
 import os
 from .neighborlist import NeighborList
 from .pairwise import Pairwise
-from .utils import pairwise_displacements
+from .utils import pairwise_displacements, batch_pairwise_displacements
 try:
     import triton
     from .dftd3_triton import compute_c6_kernel, backprop_c6_kernel
@@ -79,7 +79,8 @@ class DFTD3(torch.nn.Module):
         cutoff = None if neighbor_list.padding is None else neighbor_list.cutoff
         self.pairwise = Pairwise(DFTD3Calculator(s8, a1, a2, bohr_radius), cutoff, None)
 
-    def forward(self, positions: torch.Tensor, atomic_numbers: torch.Tensor, covalent_radii: torch.Tensor, box_vectors: torch.Tensor):
+    def forward(self, positions: torch.Tensor, atomic_numbers: torch.Tensor, covalent_radii: torch.Tensor,
+                box_vectors: torch.Tensor, batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters
@@ -91,16 +92,25 @@ class DFTD3(torch.nn.Module):
         covalent_radii: torch.Tensor | None
             a Tensor of shape (n_particles,) containing the covalent radius of each particle.  These should be
             obtained by calling get_covalent_radii().
-        box_vectors: torch.Tensor
-            a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
-            conditions are not used.
+        box_vectors: torch.Tensor | None
+            if batch is None, a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If batch is
+            not None, a Tensor of shape (n_systems, 3, 3) containing the box vectors for each system.  If None, periodic
+            boundary conditions are not used.
+        batch: torch.Tensor | None
+            a Tensor of shape (n_particles,) containing the index of the system each particle belongs to.  This must be
+            sorted in ascending order, and every system must contain at least one particle.  If None, the interaction
+            is computed for a single system instead of a batch of systems.
 
         Returns
         -------
-        a torch.Tensor containing the energy of the interaction
+        a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
+        total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        pairs = self.neighbor_list(positions, box_vectors)
-        delta = pairwise_displacements(positions, pairs, box_vectors)
+        pairs = self.neighbor_list(positions, box_vectors, batch)
+        if batch is None:
+            delta = pairwise_displacements(positions, pairs, box_vectors)
+        else:
+            delta = batch_pairwise_displacements(positions, pairs, batch, box_vectors)
         r = torch.linalg.vector_norm(delta, dim=1)
         num_atoms = positions.shape[0]
         num_pairs = pairs.shape[0]
@@ -138,7 +148,7 @@ class DFTD3(torch.nn.Module):
         # Compute the energy.
 
         c8 = 3*self.c8_scale[z1]*self.c8_scale[z2]*c6
-        energy = -self.pairwise(positions, (c6, c8), pairs, box_vectors)
+        energy = -self.pairwise(positions, (c6, c8), pairs, box_vectors, batch)
         return self.prefactor*energy
 
 

@@ -68,7 +68,8 @@ class CoulombRF(torch.nn.Module):
         self.cutoff = neighbor_list.cutoff if cutoff is None else cutoff
         self.pairwise = Pairwise(coulomb.ReactionFieldInteraction(self.cutoff, dielectric), self.cutoff, exclusions)
 
-    def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor):
+    def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor,
+                batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters
@@ -77,20 +78,26 @@ class CoulombRF(torch.nn.Module):
             a Tensor of shape (n_particles, 3) containing the Cartesian coordinates of each particle
         charges:
             a Tensor of shape (n_particles,) containing the charge of each particle
-        box_vectors: torch.Tensor
-            a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
-            conditions are not used.
+        box_vectors: torch.Tensor | None
+            if batch is None, a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If batch is
+            not None, a Tensor of shape (n_systems, 3, 3) containing the box vectors for each system.  If None, periodic
+            boundary conditions are not used.
+        batch: torch.Tensor | None
+            a Tensor of shape (n_particles,) containing the index of the system each particle belongs to.  This must be
+            sorted in ascending order, and every system must contain at least one particle.  If None, the interaction
+            is computed for a single system instead of a batch of systems.
 
         Returns
         -------
-        a torch.Tensor containing the energy of the interaction
+        a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
+        total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        neighbors = self.neighbor_list(positions, box_vectors)
-        energy = self.pairwise(positions, charges, neighbors, box_vectors)
+        neighbors = self.neighbor_list(positions, box_vectors, batch)
+        energy = self.pairwise(positions, charges, neighbors, box_vectors, batch)
         return self.prefactor*energy
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
-                      box_vectors: torch.Tensor):
+                      box_vectors: torch.Tensor) -> torch.Tensor:
         """Compute the electric field produced by the particles at a set of points.
 
         Parameters

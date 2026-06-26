@@ -122,6 +122,48 @@ def test_exclusions(device):
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('periodic', [True, False])
+def test_batch(device, periodic):
+    """Test Coulomb for a batch of systems."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_systems = 10
+    num_particles = 20*num_systems
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    positions.requires_grad_()
+    charges = 2.0*torch.rand(num_particles, dtype=torch.float32, device=device)-1.0
+    batch = torch.arange(num_systems, device=device).expand((20,-1)).T.flatten()
+    if periodic:
+        box_vectors = []
+        for i in range(num_systems):
+            scale = 0.9+0.2*torch.rand(1, dtype=torch.float32, device=device)
+            box_vectors.append(torch.tensor([[2.0, 0.0, 0.0],
+                                             [0.1, 1.6, 0.0],
+                                             [0.2, 0.1, 1.5]], dtype=torch.float32, device=device)*scale)
+        box_vectors = torch.stack(box_vectors)
+    else:
+        box_vectors = None
+    cutoff = 0.4
+    neighbor_list = NeighborList(cutoff, device=device)
+    coulomb = CoulombRF(neighbor_list, None, 138.935)
+    energy = coulomb(positions, charges, box_vectors, batch)
+    for i in range(num_systems):
+        mask = batch == i
+        energy1 = energy[i]
+        energy1.backward(retain_graph=True)
+        grad1 = positions.grad[mask]
+        pos = torch.tensor(positions[mask], device=device, requires_grad=True)
+        box = None if box_vectors is None else box_vectors[i]
+        energy2 = coulomb(pos, charges[mask], box)
+        assert torch.allclose(energy1, energy2)
+        energy2.backward()
+        grad2 = pos.grad
+        assert torch.allclose(grad1, grad2)
+        positions.grad.zero_()
+        pos.grad.zero_()
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compute_field(device):
     """Test computing the electric field."""
     if not torch.cuda.is_available() and device == 'cuda':
