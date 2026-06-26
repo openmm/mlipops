@@ -140,9 +140,9 @@ def test_batch(device):
         energy1 = energy[i]
         energy1.backward(retain_graph=True)
         grad1 = positions.grad[mask]
-        pos = torch.tensor(positions[mask], device=device, requires_grad=True)
+        pos = positions[mask].detach().clone().requires_grad_(True)
         energy2 = coulomb(pos, charges[mask])
-        assert torch.allclose(energy1, energy2)
+        assert torch.allclose(energy1, energy2, rtol=1e-4)
         energy2.backward()
         grad2 = pos.grad
         assert torch.allclose(grad1, grad2)

@@ -84,7 +84,7 @@ def test_batch(device, periodic):
     num_particles = 20*num_systems
     positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
     positions.requires_grad_()
-    numbers = torch.randint(5, 10, (num_particles,))
+    numbers = torch.randint(5, 10, (num_particles,), device=device)
     radii = get_covalent_radii(numbers, 0.052917721)
     batch = torch.arange(num_systems, device=device).expand((20,-1)).T.flatten()
     if periodic:
