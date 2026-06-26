@@ -1,7 +1,7 @@
 import torch
 from collections.abc import Callable
 from typing import Any
-from .utils import pairwise_displacements
+from .utils import pairwise_displacements, batch_pairwise_displacements
 
 
 class Pairwise(torch.nn.Module):
@@ -71,7 +71,8 @@ class Pairwise(torch.nn.Module):
                     exclusion_indices[i][j] = indices[i][j]
             self.register_buffer('exclusion_indices', exclusion_indices)
 
-    def forward(self, positions: torch.Tensor, parameters: Any, pairs: torch.Tensor, box_vectors: torch.Tensor | None):
+    def forward(self, positions: torch.Tensor, parameters: Any, pairs: torch.Tensor, box_vectors: torch.Tensor | None,
+                batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters
@@ -84,14 +85,23 @@ class Pairwise(torch.nn.Module):
             a Tensor of shape (n_pairs, 2).  Each row contains the indices of two particles that interact.  Typically
             it is created by a NeighborList.
         box_vectors: torch.Tensor | None
-            a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
-            conditions are not used.
+            if batch is None, a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If batch is
+            not None, a Tensor of shape (n_systems, 3, 3) containing the box vectors for each system.  If None, periodic
+            boundary conditions are not used.
+        batch: torch.Tensor | None
+            a Tensor of shape (n_particles,) containing the index of the system each particle belongs to.  This must be
+            sorted in ascending order, and every system must contain at least one particle.  If None, the interaction
+            is computed for a single system instead of a batch of systems.
 
         Returns
         -------
-        a torch.Tensor containing the energy of the interaction
+        a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
+        total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        delta = pairwise_displacements(positions, pairs, box_vectors)
+        if batch is None:
+            delta = pairwise_displacements(positions, pairs, box_vectors)
+        else:
+            delta = batch_pairwise_displacements(positions, pairs, batch, box_vectors)
         distance = torch.linalg.vector_norm(delta, dim=1)
         energy = self.computation(pairs, distance, delta, parameters)
         masks = []
@@ -108,4 +118,9 @@ class Pairwise(torch.nn.Module):
             mask = masks[0]
         else:
             mask = masks[0]*masks[1]
-        return torch.sum(torch.where(mask, energy, 0.0))
+        energy = torch.where(mask, energy, 0.0)
+        if batch is None:
+            return torch.sum(energy)
+        result = torch.zeros((batch.max()+1,), dtype=torch.float32, device=positions.device)
+        result.scatter_add_(0, batch[pairs[:,0]], energy)
+        return result

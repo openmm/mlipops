@@ -41,6 +41,35 @@ def periodic_displacements(displacements: torch.Tensor, box_vectors: torch.Tenso
     return displacements
 
 
+def batch_periodic_displacements(displacements: torch.Tensor, batch: torch.Tensor, box_vectors: torch.Tensor | None):
+    """Apply periodic boundary conditions to displacement vectors for a batch of systems.
+
+    Parameters
+    ----------
+    displacements: torch.Tensor
+        a Tensor of shape (M, 3) where M is arbitrary.  Each displacement vector should be the difference between a pair
+        of positions in 3D space.
+    batch: torch.Tensor | None
+        a Tensor of shape (M,) containing the index of the system each vector belongs to
+    box_vectors: torch.Tensor | None
+        a Tensor of shape (n_systems, 3, 3) containing box vectors defining the periodic box for each system.  If None,
+        periodic boundary conditions are not used and the displacement vectors are returned unchanged.
+
+    Returns
+    -------
+    a Tensor of the same shape as displacements.  The vectors have been modified to apply periodic boundary conditions.
+    """
+    if box_vectors is not None:
+        box = box_vectors[batch]
+        scale = torch.round(displacements[:,2]/box[:,2,2])
+        displacements = displacements - scale.unsqueeze(1)*box[:,2]
+        scale = torch.round(displacements[:,1]/box[:,1,1])
+        displacements = displacements - scale.unsqueeze(1)*box[:,1]
+        scale = torch.round(displacements[:,0]/box[:,0,0])
+        displacements = displacements - scale.unsqueeze(1)*box[:,0]
+    return displacements
+
+
 def pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, box_vectors: torch.Tensor | None):
     """Compute the displacement between pairs of points, optionally taking periodic boundary conditions into
     account.
@@ -89,15 +118,9 @@ def batch_pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, b
     """
     displacements = positions[pairs[:,1]] - positions[pairs[:,0]]
     if box_vectors is not None:
-        pair_system = batch[pairs[:,0]]
-        pair_box = box_vectors[pair_system]
-        scale = torch.round(displacements[:,2]/pair_box[:,2,2])
-        displacements = displacements - scale.unsqueeze(1)*pair_box[:,2]
-        scale = torch.round(displacements[:,1]/pair_box[:,1,1])
-        displacements = displacements - scale.unsqueeze(1)*pair_box[:,1]
-        scale = torch.round(displacements[:,0]/pair_box[:,0,0])
-        displacements = displacements - scale.unsqueeze(1)*pair_box[:,0]
+        displacements = batch_periodic_displacements(displacements, batch[pairs[:,0]], box_vectors)
     return displacements
+
 
 class DisplacementFunction(torch.autograd.Function):
     """Compute the displacement between pairs of points, optionally taking periodic boundary conditions into
