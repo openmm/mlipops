@@ -1,8 +1,9 @@
 import torch
+import math
 from .utils import periodic_displacements, batch_pairwise_displacements
 try:
     import triton
-    from .neighborlist_triton import find_sort_keys_kernel, find_neighbors_kernel
+    from .neighborlist_triton import find_sort_keys_kernel, find_neighbors_kernel, small_batch_kernel
     has_triton = True
 except ImportError:
     has_triton = False
@@ -145,6 +146,10 @@ class NeighborList(torch.nn.Module):
                 result = self._compute_small_single(positions, box_vectors, cutoff)
         else:
             result = self._compute_small_batch(positions, box_vectors, cutoff, batch)
+            if result is None:
+                # Try again with a larger output buffer.
+
+                result = self._compute_small_batch(positions, box_vectors, cutoff, batch)
 
         # Cache the result for future use.
 
@@ -257,7 +262,7 @@ class NeighborList(torch.nn.Module):
         output = output.narrow(0, 0, output_counter)
         return output
 
-    def _compute_small_batch(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float,
+    def _compute_small_batch(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float | None,
                              batch: torch.Tensor) -> torch.Tensor:
         """This implements a brute force algorithm to identify neighbors by testing all possible pairs within each
         system.  It is fast for small numbers of particles but scales as O(n^2), making it less suitable for larger
@@ -268,14 +273,38 @@ class NeighborList(torch.nn.Module):
         index = (batch[:-1] != batch[1:]).nonzero().flatten()
         start_index = torch.nn.functional.pad(index+1, pad=(1,0))
         system_particles = torch.nn.functional.pad(start_index[1:], pad=(0,1), value=batch.shape[0]) - start_index
+        num_systems = start_index.shape[0]
+
+        # If Triton is available, use it to compute the neighbor list more efficiently.
+
+        if self.use_triton:
+            cutoff2 = None if cutoff is None else cutoff**2
+            mean_particles = positions.shape[0]/num_systems
+            block_size = 256
+            programs_per_system = int(math.ceil(0.5*mean_particles*mean_particles/block_size))
+            output = torch.empty((self._max_neighbors, 2), dtype=torch.int32, device=self.device)
+            output_counter = torch.zeros((1,), dtype=torch.int32, device=self.device)
+            g = lambda meta: (programs_per_system*num_systems,)
+            small_batch_kernel[g](output, output_counter, start_index, system_particles, positions, box_vectors,
+                                  cutoff2, self._include_self, self._include_symmetric, num_systems, self._max_neighbors,
+                                  programs_per_system, block_size)
+            if output_counter > self._max_neighbors:
+                # Too many neighbors were found to fit in the output tensor.  Increase the output
+                # size and try again.
+
+                self._max_neighbors = int(1.1*output_counter)
+                return None
+            output = output.narrow(0, 0, output_counter)
+            return output
 
         # Build a list of all possible pairs.
 
-        num_systems = start_index.shape[0]
         system_pairs = []
         for i in range(num_systems):
             system_pairs.append(self._compute_dense_pairs(system_particles[i], start_index[i]))
         all_pairs = torch.cat(system_pairs)
+        if cutoff is None:
+            return all_pairs
 
         # Filter them by distance.
 
