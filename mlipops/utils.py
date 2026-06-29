@@ -1,7 +1,7 @@
 import torch
 try:
     import triton
-    from .utils_triton import backprop_delta_kernel, batch_periodic_displacements_kernel
+    from .utils_triton import batch_periodic_displacements_kernel
     has_triton = True
 except ImportError:
     has_triton = False
@@ -93,8 +93,6 @@ def pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, box_vec
     -------
     a Tensor of shape (n_pairs, 3).  Each row contains the displacement between the corresponding pair of points.
     """
-    if has_triton and positions.device.type == 'cuda':
-        return DisplacementFunction.apply(positions, pairs, box_vectors)
     return periodic_displacements(positions[pairs[:,1]] - positions[pairs[:,0]], box_vectors)
 
 
@@ -124,26 +122,6 @@ def batch_pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, b
     if box_vectors is not None:
         displacements = batch_periodic_displacements(displacements, batch[pairs[:,0]], box_vectors)
     return displacements
-
-
-class DisplacementFunction(torch.autograd.Function):
-    """Compute the displacement between pairs of points, optionally taking periodic boundary conditions into
-    account.  PyTorch can compute the forward pass efficiently, but the default implementation of the backward pass
-    is very slow.  We use a Triton kernel to do it more efficiently.
-    """
-    @staticmethod
-    def forward(ctx, positions: torch.Tensor, pairs: torch.Tensor, box_vectors: torch.Tensor):
-        delta = periodic_displacements(positions[pairs[:,1]] - positions[pairs[:,0]], box_vectors)
-        ctx.save_for_backward(positions, pairs)
-        return delta
-
-    @staticmethod
-    def backward(ctx, *grad_outputs: torch.Tensor):
-        positions, pairs = ctx.saved_tensors
-        result = torch.zeros_like(positions)
-        g = lambda meta: (triton.cdiv(pairs.shape[0], meta['BLOCK_SIZE']),)
-        backprop_delta_kernel[g](result, grad_outputs[0], pairs, pairs.shape[0], 256)
-        return result, None, None
 
 
 def get_covalent_radii(atomic_numbers: torch.Tensor, bohr_radius: float):
