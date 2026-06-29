@@ -1,7 +1,7 @@
 import torch
 try:
     import triton
-    from .utils_triton import backprop_delta_kernel
+    from .utils_triton import backprop_delta_kernel, batch_periodic_displacements_kernel
     has_triton = True
 except ImportError:
     has_triton = False
@@ -60,13 +60,17 @@ def batch_periodic_displacements(displacements: torch.Tensor, batch: torch.Tenso
     a Tensor of the same shape as displacements.  The vectors have been modified to apply periodic boundary conditions.
     """
     if box_vectors is not None:
-        box = box_vectors[batch]
-        scale = torch.round(displacements[:,2]/box[:,2,2])
-        displacements = displacements - scale.unsqueeze(1)*box[:,2]
-        scale = torch.round(displacements[:,1]/box[:,1,1])
-        displacements = displacements - scale.unsqueeze(1)*box[:,1]
-        scale = torch.round(displacements[:,0]/box[:,0,0])
-        displacements = displacements - scale.unsqueeze(1)*box[:,0]
+        if has_triton and displacements.device.type == 'cuda':
+            g = lambda meta: (triton.cdiv(batch.shape[0], meta['BLOCK_SIZE']),)
+            batch_periodic_displacements_kernel[g](displacements, batch, box_vectors, batch.shape[0], 256)
+        else:
+            box = box_vectors[batch]
+            scale = torch.round(displacements[:,2]/box[:,2,2])
+            displacements = displacements - scale.unsqueeze(1)*box[:,2]
+            scale = torch.round(displacements[:,1]/box[:,1,1])
+            displacements = displacements - scale.unsqueeze(1)*box[:,1]
+            scale = torch.round(displacements[:,0]/box[:,0,0])
+            displacements = displacements - scale.unsqueeze(1)*box[:,0]
     return displacements
 
 

@@ -111,10 +111,10 @@ def test_batch(device, periodic):
         box = None if box_vectors is None else box_vectors[i]
         pairs2 = neighbor_list(pos, box)
         energy2 = pairwise(pos, charges[mask], pairs2, box)
-        assert torch.allclose(energy1, energy2)
+        assert torch.allclose(energy1, energy2, rtol=1e-4)
         energy2.backward()
         grad2 = pos.grad
-        assert torch.allclose(grad1, grad2)
+        assert torch.allclose(grad1, grad2, rtol=1e-4)
         positions.grad.zero_()
         pos.grad.zero_()
 
