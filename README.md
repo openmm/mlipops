@@ -30,6 +30,7 @@ These are the currently implemented features.  Many more are planned.  Expect th
 - Coulomb interactions
   - No cutoff: charges and dipoles, non-periodic systems
   - Reaction field: charges only, periodic and non-periodic systems
+  - Ewald summation: charges and dipoles, periodic systems
   - Particle Mesh Ewald: charges and dipoles, periodic systems
 - Ziegler-Biersack-Littmark (ZBL) potential
 - DFT-D3(BJ) dispersion

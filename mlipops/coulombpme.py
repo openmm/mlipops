@@ -37,7 +37,7 @@ class CoulombPME(torch.nn.Module):
     When performing backpropagation, this class computes derivatives with respect to positions, charges, and dipoles,
     but not to any other parameters (box vectors, alpha, etc.).  In addition, it only computes first derivatives.
     Attempting to compute a second derivative will throw an exception.  This means that if you use PME during training,
-    the loss function can only depend on energy, not forces.
+    the loss function can only depend on energy, not forces.  Consider using CoulombEwald during training instead.
 
     In addition to calculating energy and forces, this class can compute the electric field at arbitrary points in
     space.  To do this, call compute_field().
@@ -310,7 +310,7 @@ def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.
     grid = torch.zeros(grid_size, dtype=torch.float32, device=device)
     if pme.use_triton:
         block_size = triton.next_power_of_2(order*order*order)
-        if dipoles is None:
+        if pme.max_multipole == 'charge':
             transformed_dipoles = None
             spread_charge_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, data, ti, num_particles, order, block_size)
         else:
@@ -318,7 +318,7 @@ def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.
             spread_dipoles_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, transformed_dipoles,
                                                               data, ddata, ti, num_particles, order, block_size)
     else:
-        if dipoles is None:
+        if pme.max_multipole == 'charge':
             transformed_dipoles = None
             spread_charge(grid, grid_size_tensor, charges, data, ti, order)
         else:

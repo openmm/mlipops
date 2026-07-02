@@ -1,3 +1,4 @@
+from .coulombewald import CoulombEwald
 from .coulombnc import CoulombNC
 from .coulombpme import CoulombPME
 from .coulombrf import CoulombRF
