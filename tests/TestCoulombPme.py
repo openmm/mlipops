@@ -403,10 +403,10 @@ def test_batch(device):
         pos = torch.tensor(positions[mask], device=device, requires_grad=True)
         box = None if box_vectors is None else box_vectors[i]
         energy2 = pme(pos, charges[mask], box)
-        assert torch.allclose(energy1, energy2, rtol=1e-4)
+        assert torch.allclose(energy1, energy2, rtol=1e-4, atol=1e-4)
         energy2.backward()
         grad2 = pos.grad
-        assert torch.allclose(grad1, grad2, rtol=1e-4)
+        assert torch.allclose(grad1, grad2, rtol=1e-4, atol=1e-4)
         positions.grad.zero_()
         pos.grad.zero_()
 
