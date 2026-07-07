@@ -83,6 +83,46 @@ def test_batch(device, periodic):
         pos.grad.zero_()
 
 
+@pytest.mark.parametrize('device,disable_triton', [('cpu', False), ('cuda', False), ('cuda', True)])
+def test_force_derivatives(device, disable_triton):
+    """Test computing derivatives of the force with CoulombRF."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    positions = 3*torch.rand((9, 3), dtype=torch.float32, device=device, requires_grad=True)-1
+    numbers = torch.randint(5, 10, (9,), device=device)
+    radii = get_covalent_radii(numbers, 0.052917721)
+    radii.requires_grad_(True)
+    box_vectors = torch.tensor([[1, 0, 0], [0,1.1, 0], [0, 0, 1.2]], dtype=torch.float32, device=device)
+    neighbor_list = NeighborList(0.5, device=device)
+    d3 = DFTD3(neighbor_list, 0.78981345, 0.49484001, 5.73083694, 138.935, 0.052917721)
+    energy = d3(positions, numbers, radii, box_vectors, need_second_derivatives=disable_triton)
+    force = -torch.autograd.grad(energy, positions, create_graph=True)[0]
+
+    # Compute some second derivatives.
+
+    force_norm = torch.linalg.norm(force)
+    if device == 'cuda' and not disable_triton:
+        with pytest.raises(NotImplementedError):
+            torch.autograd.grad(force_norm, positions)
+        return
+    pos_grad = torch.autograd.grad(force_norm, positions, retain_graph=True)[0]
+    radius_grad = torch.autograd.grad(force_norm, radii)[0]
+
+    # Check the radius derivative against a finite difference approximation.
+
+    delta = 0.0001
+    for i in range(len(radii)):
+        r1 = radii.clone()
+        r1[i] += delta
+        energy1 = d3(positions, numbers, r1, box_vectors)
+        force_norm1 = torch.linalg.norm(torch.autograd.grad(energy1, positions)[0])
+        r2 = radii.clone()
+        r2[i] -= delta
+        energy2 = d3(positions, numbers, r2, box_vectors)
+        force_norm2 = torch.linalg.norm(torch.autograd.grad(energy2, positions)[0])
+        assert torch.allclose(radius_grad[i], (force_norm1-force_norm2)/(2*delta), rtol=1e-2, atol=5e-3)
+
+
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):
     """Test that DFTD3 can be compiled and pickled."""

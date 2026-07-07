@@ -27,6 +27,10 @@ class DFTD3(torch.nn.Module):
     appropriate to add a DFT-D3(BJ) potential using the parameters for the DFT functional used to generate the training
     data.
 
+    When performing backpropagation with Triton acceleration, this class can only compute first derivatives.  If you
+    need second derivatives, specify need_second_derivatives=True to disable Triton acceleration.  This will make it
+    slower, but allow for arbitrary derivatives.
+
     When you create an instance of this class, you must specify the values of Coulomb's constant 1/(4*pi*eps0) and the
     Bohr radius.  The values you specify set the unit system.  Here are their values for some common units.
 
@@ -80,7 +84,7 @@ class DFTD3(torch.nn.Module):
         self.pairwise = Pairwise(DFTD3Calculator(s8, a1, a2, bohr_radius), cutoff, None)
 
     def forward(self, positions: torch.Tensor, atomic_numbers: torch.Tensor, covalent_radii: torch.Tensor,
-                box_vectors: torch.Tensor, batch: torch.Tensor | None = None) -> torch.Tensor:
+                box_vectors: torch.Tensor, batch: torch.Tensor | None = None, need_second_derivatives: bool = False) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters
@@ -100,6 +104,8 @@ class DFTD3(torch.nn.Module):
             a Tensor of shape (n_particles,) containing the index of the system each particle belongs to.  This must be
             sorted in ascending order, and every system must contain at least one particle.  If None, the interaction
             is computed for a single system instead of a batch of systems.
+        need_second_derivatives: bool
+            whether you intend to compute second derivatives of the returned value.  This disables Triton acceleration.
 
         Returns
         -------
@@ -127,8 +133,8 @@ class DFTD3(torch.nn.Module):
 
         z1 = atomic_numbers[pairs[:,0]]
         z2 = atomic_numbers[pairs[:,1]]
-        if self.use_triton:
-            c6 = C6Function.apply(self, positions, pairs, atomic_numbers, cn)
+        if self.use_triton and not need_second_derivatives:
+            c6 = C6Function.apply(self, pairs, atomic_numbers, cn)
         else:
             max_ref = torch.max(self.num_ref[atomic_numbers])
             sum_c6 = torch.zeros((num_pairs,), dtype=torch.float32, device=positions.device)
@@ -173,22 +179,34 @@ class C6Function(torch.autograd.Function):
     """Compute C6 for each pair using Triton."""
 
     @staticmethod
-    def forward(ctx, d3: DFTD3, positions: torch.Tensor, pairs: torch.Tensor, atomic_numbers: torch.Tensor, cn: torch.Tensor):
+    def forward(ctx, d3: DFTD3, pairs: torch.Tensor, atomic_numbers: torch.Tensor, cn: torch.Tensor):
         num_pairs = pairs.shape[0]
-        c6 = torch.empty((num_pairs,), dtype=torch.float32, device=positions.device)
+        c6 = torch.empty((num_pairs,), dtype=torch.float32, device=atomic_numbers.device)
         g = lambda meta: (triton.cdiv(num_pairs, meta['BLOCK_SIZE']),)
         compute_c6_kernel[g](c6, atomic_numbers, cn, d3.cn_ref, d3.c6_ref, d3.num_ref, pairs, num_pairs, 256)
-        ctx.save_for_backward(positions, pairs, atomic_numbers, cn)
+        ctx.save_for_backward(pairs, atomic_numbers, cn)
         ctx.d3 = d3
         return c6
 
     @staticmethod
     def backward(ctx, *grad_outputs: torch.Tensor):
-        positions, pairs, atomic_numbers, cn = ctx.saved_tensors
+        pairs, atomic_numbers, cn = ctx.saved_tensors
         d3 = ctx.d3
-        num_particles = positions.shape[0]
+        return C6BackwardFunction.apply(d3, pairs, atomic_numbers, cn, grad_outputs[0])
+
+
+class C6BackwardFunction(torch.autograd.Function):
+    """Compute the derivative of C6 for each pair using Triton."""
+
+    @staticmethod
+    def forward(ctx, d3: DFTD3, pairs: torch.Tensor, atomic_numbers: torch.Tensor, cn: torch.Tensor, grad_output: torch.Tensor):
+        num_particles = atomic_numbers.shape[0]
         num_pairs = pairs.shape[0]
-        result = torch.zeros((num_particles,), dtype=torch.float32, device=positions.device)
+        result = torch.zeros((num_particles,), dtype=torch.float32, device=atomic_numbers.device)
         g = lambda meta: (triton.cdiv(num_pairs, meta['BLOCK_SIZE']),)
-        backprop_c6_kernel[g](result, grad_outputs[0], atomic_numbers, cn, d3.cn_ref, d3.c6_ref, d3.num_ref, pairs, num_pairs, 256)
-        return None, None, None, None, result
+        backprop_c6_kernel[g](result, grad_output, atomic_numbers, cn, d3.cn_ref, d3.c6_ref, d3.num_ref, pairs, num_pairs, 256)
+        return None, None, None, result
+
+    @staticmethod
+    def backward(ctx, *grad_outputs: torch.Tensor):
+        raise NotImplementedError('DFTD3 with Triton does not support second derivatives.  Specify need_second_derivatives=True to disable Triton acceleration.')

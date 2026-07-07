@@ -348,6 +348,43 @@ def test_compute_field(device, include_direct, include_reciprocal):
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
+def test_force_derivatives(device):
+    """Test computing derivatives of the force with CoulombEwald."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    positions = 3*torch.rand((9, 3), dtype=torch.float32, device=device, requires_grad=True)-1
+    exclusions = torch.tensor([[0,1], [2,3]], dtype=torch.int32, device=device)
+    charges = torch.tensor([(i-4)*0.1 for i in range(9)], dtype=torch.float32, device=device, requires_grad=True)
+    dipoles = 0.05*torch.randn((9, 3), dtype=torch.float32, device=device, requires_grad=True)
+    box_vectors = torch.tensor([[1, 0, 0], [0,1.1, 0], [0, 0, 1.2]], dtype=torch.float32, device=device)
+    neighbor_list = NeighborList(0.5, device=device)
+    ewald = CoulombEwald(neighbor_list, exclusions, 5, 5, 7, 5.0, 138.935, max_multipole='dipole')
+    energy = ewald(positions, charges, box_vectors, dipoles=dipoles)
+    force = -torch.autograd.grad(energy, positions, create_graph=True)[0]
+
+    # Compute some second derivatives.
+
+    force_norm = torch.linalg.norm(force)
+    pos_grad = torch.autograd.grad(force_norm, positions, retain_graph=True)[0]
+    charge_grad = torch.autograd.grad(force_norm, charges, retain_graph=True)[0]
+    dipole_grad = torch.autograd.grad(force_norm, dipoles)[0]
+
+    # Check the charge derivative against a finite difference approximation.
+
+    delta = 0.05
+    for i in range(len(charges)):
+        c1 = charges.clone()
+        c1[i] += delta
+        energy1 = ewald(positions, c1, box_vectors, dipoles=dipoles)
+        force_norm1 = torch.linalg.norm(torch.autograd.grad(energy1, positions)[0])
+        c2 = charges.clone()
+        c2[i] -= delta
+        energy2 = ewald(positions, c2, box_vectors, dipoles=dipoles)
+        force_norm2 = torch.linalg.norm(torch.autograd.grad(energy2, positions)[0])
+        assert torch.allclose(charge_grad[i], (force_norm1-force_norm2)/(2*delta), rtol=1e-2, atol=1e-2)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compile_and_pickle(device):
     """Test that CoulombEwald can be compiled and pickled."""
     if not torch.cuda.is_available() and device == 'cuda':
