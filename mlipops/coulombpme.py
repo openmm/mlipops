@@ -161,7 +161,7 @@ class CoulombPME(torch.nn.Module):
         self.zmoduli = torch.nn.Parameter(moduli[2], requires_grad=False)
 
     def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor, include_direct: bool = True,
-                include_reciprocal: bool = True, dipoles: torch.Tensor = None):
+                include_reciprocal: bool = True, dipoles: torch.Tensor = None, batch: torch.Tensor | None = None):
         """Compute the interaction.
 
         Parameters
@@ -179,28 +179,51 @@ class CoulombPME(torch.nn.Module):
         dipoles: torch.Tensor | None
             a Tensor of shape (n_particles, 3) containing the dipole moment of each particle.  If max_multipole is
             'charge', this is ignored.
+        batch: torch.Tensor | None
+            a Tensor of shape (n_particles,) containing the index of the system each particle belongs to.  This must be
+            sorted in ascending order, and every system must contain at least one particle.  If None, the interaction
+            is computed for a single system instead of a batch of systems.
 
         Returns
         -------
-        a torch.Tensor containing the energy of the interaction
+        a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
+        total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        energy = torch.zeros((1,), dtype=torch.float32, device=positions.device)
+        if batch is None:
+            num_systems = 1
+        else:
+            num_systems = batch.max()+1
+        energy = torch.zeros((num_systems,), dtype=torch.float32, device=positions.device)
         if include_direct:
-            neighbors = self.neighbor_list(positions, box_vectors)
+            neighbors = self.neighbor_list(positions, box_vectors, batch)
             if self.max_multipole == 'charge':
                 params = charges
             else:
                 params = (charges, dipoles)
-            energy += self.direct(positions, params, neighbors, box_vectors)
+            energy += self.direct(positions, params, neighbors, box_vectors, batch)
             if self.exclusions is not None:
-                energy -= self.exclusion_correction(positions, params, self.exclusions, None)
+                energy -= self.exclusion_correction(positions, params, self.exclusions, None, batch)
         if include_reciprocal:
-            volume = box_vectors.diag().prod()
-            energy -= torch.sum(charges**2)*self.alpha/math.sqrt(torch.pi)
-            energy -= 0.5*torch.pi*torch.sum(charges)**2/(volume*self.alpha*self.alpha)
-            if self.max_multipole != 'charge':
-                energy -= (2/3)*torch.sum(dipoles*dipoles)*self.alpha**3/math.sqrt(torch.pi)
-            energy += ReciprocalFunction.apply(self, positions, charges, dipoles, box_vectors)
+            if batch is None:
+                volume = box_vectors.diag().prod()
+                energy -= torch.sum(charges**2)*self.alpha/math.sqrt(torch.pi)
+                energy -= 0.5*torch.pi*torch.sum(charges)**2/(volume*self.alpha*self.alpha)
+                if self.max_multipole != 'charge':
+                    energy -= (2/3)*torch.sum(dipoles*dipoles)*self.alpha**3/math.sqrt(torch.pi)
+                energy += ReciprocalFunction.apply(self, positions, charges, dipoles, box_vectors)
+            else:
+                volume = torch.einsum('ijj->ij', box_vectors).prod(dim=1)
+                sum_charges2 = torch.zeros_like(energy)
+                sum_charges2.scatter_add_(0, batch, charges**2)
+                energy -= sum_charges2*self.alpha/math.sqrt(torch.pi)
+                sum_charges = torch.zeros_like(energy)
+                sum_charges.scatter_add_(0, batch, charges)
+                energy -= 0.5*torch.pi*sum_charges**2/(volume*self.alpha*self.alpha)
+                if self.max_multipole != 'charge':
+                    sum_dipoles2 = torch.zeros_like(energy)
+                    sum_dipoles2.scatter_add_(0, batch, (dipoles**2).sum(axis=1))
+                    energy -= (2/3)*sum_dipoles2*self.alpha**3/math.sqrt(torch.pi)
+                energy += self._compute_recip_energy_batch(positions, charges, dipoles, box_vectors, batch, num_systems)
         return self.prefactor*energy
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
@@ -263,6 +286,19 @@ class CoulombPME(torch.nn.Module):
                 interp_derivatives(pos_deriv, None, grid, grid_size_tensor, data, ddata, ti, self.order)
             field -= torch.matmul(pos_deriv, (grid_size_tensor.view((1,3))*recip_box_vectors).T)
         return self.prefactor*field
+
+    def _compute_recip_energy_batch(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor,
+                                    box_vectors: torch.Tensor, batch: torch.Tensor | None, num_systems: int):
+        index = (batch[:-1] != batch[1:]).nonzero().flatten()
+        start_index = torch.nn.functional.pad(index+1, pad=(1,0))
+        end_index = torch.nn.functional.pad(start_index[1:], pad=(0,1), value=batch.shape[0])
+        energy = []
+        for i, (start, end) in enumerate(zip(start_index, end_index)):
+            batch_positions = positions[start:end]
+            batch_charges = charges[start:end]
+            batch_dipoles = None if dipoles is None else dipoles[start:end]
+            energy.append(ReciprocalFunction.apply(self, batch_positions, batch_charges, batch_dipoles, box_vectors[i]))
+        return torch.stack(energy)
 
 
 def compute_spline_coefficients(pme: CoulombPME, positions: torch.Tensor, recip_box_vectors: torch.Tensor, grid_size_tensor: torch.Tensor):
