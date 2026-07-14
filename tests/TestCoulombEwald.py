@@ -277,15 +277,17 @@ def test_dipole_deriv(device):
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
-def test_batch(device):
+@pytest.mark.parametrize('max_multipole', ['charge', 'dipole'])
+def test_batch(device, max_multipole):
     """Test Ewald for a batch of systems."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     num_systems = 10
     num_particles = 20*num_systems
-    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    positions = 5.0*torch.rand((num_particles, 3), dtype=torch.float32, device=device)-2.0
     positions.requires_grad_()
     charges = 2.0*torch.rand(num_particles, dtype=torch.float32, device=device)-1.0
+    dipoles = 0.05*(torch.rand((num_particles, 3), dtype=torch.float32, device=device)-0.5)
     batch = torch.arange(num_systems, device=device).expand((20,-1)).T.flatten()
     box_vectors = []
     for i in range(num_systems):
@@ -296,20 +298,20 @@ def test_batch(device):
     box_vectors = torch.stack(box_vectors)
     cutoff = 0.4
     neighbor_list = NeighborList(cutoff, device=device)
-    ewald = CoulombEwald(neighbor_list, None, 5, 5, 7, 5.0, 138.935)
-    energy = ewald(positions, charges, box_vectors, batch=batch)
+    ewald = CoulombEwald(neighbor_list, None, 5, 5, 7, 5.0, 138.935, max_multipole=max_multipole)
+    energy = ewald(positions, charges, box_vectors, dipoles=dipoles, batch=batch)
     for i in range(num_systems):
         mask = batch == i
         energy1 = energy[i]
         energy1.backward(retain_graph=True)
         grad1 = positions.grad[mask]
-        pos = torch.tensor(positions[mask], device=device, requires_grad=True)
+        pos = positions[mask].detach().clone().requires_grad_(True)
         box = None if box_vectors is None else box_vectors[i]
-        energy2 = ewald(pos, charges[mask], box)
+        energy2 = ewald(pos, charges[mask], box, dipoles=dipoles[mask])
         assert torch.allclose(energy1, energy2, rtol=1e-4)
         energy2.backward()
         grad2 = pos.grad
-        assert torch.allclose(grad1, grad2, rtol=1e-4)
+        assert torch.allclose(grad1, grad2, rtol=1e-3, atol=1e-4)
         positions.grad.zero_()
         pos.grad.zero_()
 

@@ -268,10 +268,22 @@ class CoulombEwald(torch.nn.Module):
         index = (batch[:-1] != batch[1:]).nonzero().flatten()
         start_index = torch.nn.functional.pad(index+1, pad=(1,0))
         end_index = torch.nn.functional.pad(start_index[1:], pad=(0,1), value=batch.shape[0])
-        energy = []
-        for i, (start, end) in enumerate(zip(start_index, end_index)):
-            batch_positions = positions[start:end]
-            batch_charges = charges[start:end]
-            batch_dipoles = None if dipoles is None else dipoles[start:end]
-            energy.append(self._compute_recip_energy(batch_positions, batch_charges, batch_dipoles, box_vectors[i]))
-        return torch.stack(energy)
+        recip_box_vectors = torch.linalg.inv(box_vectors)
+        k = self.wave_indices.unsqueeze(0)@(2*torch.pi*recip_box_vectors.transpose(1, 2))
+        phase = torch.einsum('ijk,ik->ji', k[batch], positions)
+        scatter_index = batch.expand(self.wave_indices.shape[0], -1).T
+        if self.max_multipole == 'charge':
+            sum1 = torch.zeros((num_systems, self.wave_indices.shape[0]), dtype=torch.float32, device=positions.device)
+            sum2 = torch.zeros((num_systems, self.wave_indices.shape[0]), dtype=torch.float32, device=positions.device)
+            sum1.scatter_add_(0, scatter_index, (torch.cos(phase)*charges).T)
+            sum2.scatter_add_(0, scatter_index, (torch.sin(phase)*charges).T)
+        else:
+            kd = torch.einsum('ijk,ik->ji', k[batch], dipoles)
+            sum1 = torch.zeros((num_systems, self.wave_indices.shape[0]), dtype=torch.float32, device=positions.device)
+            sum2 = torch.zeros((num_systems, self.wave_indices.shape[0]), dtype=torch.float32, device=positions.device)
+            sum1.scatter_add_(0, scatter_index, (torch.cos(phase)*charges - torch.sin(phase)*kd).T)
+            sum2.scatter_add_(0, scatter_index, (torch.sin(phase)*charges + torch.cos(phase)*kd).T)
+        k2 = (k*k).sum(dim=2)
+        ak = torch.exp(self._exp_coeff*k2)/k2
+        energy = torch.sum(ak*(sum1**2 + sum2**2), dim=1)
+        return energy*4*torch.pi*torch.diagonal(recip_box_vectors, dim1=1, dim2=2).prod(dim=1)
