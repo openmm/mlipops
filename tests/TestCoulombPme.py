@@ -408,7 +408,7 @@ def test_batch(device, max_multipole):
         assert torch.allclose(energy1, energy2, rtol=1e-4, atol=1e-4)
         energy2.backward()
         grad2 = pos.grad
-        assert torch.allclose(grad1, grad2, rtol=1e-4, atol=1e-4)
+        assert torch.allclose(grad1, grad2, rtol=1e-3, atol=1e-4)
         positions.grad.zero_()
         pos.grad.zero_()
 

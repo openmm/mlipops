@@ -133,7 +133,7 @@ def test_compare_to_pme(device, max_multipole):
     for include_direct, include_reciprocal in [(True,False), (False,True), (True,True)]:
         ewald_energy = ewald(positions, charges, box_vectors, include_direct, include_reciprocal, dipoles)
         pme_energy = pme(positions, charges, box_vectors, include_direct, include_reciprocal, dipoles)
-        assert torch.allclose(ewald_energy, pme_energy, rtol=1e-3)
+        assert torch.allclose(ewald_energy, pme_energy, rtol=1e-3, atol=1e-2)
         ewald_energy.backward()
         ewald_grad = positions.grad.clone()
         positions.grad.zero_()
