@@ -160,8 +160,9 @@ class CoulombPME(torch.nn.Module):
         self.ymoduli = torch.nn.Parameter(moduli[1], requires_grad=False)
         self.zmoduli = torch.nn.Parameter(moduli[2], requires_grad=False)
 
-    def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor, include_direct: bool = True,
-                include_reciprocal: bool = True, dipoles: torch.Tensor = None, batch: torch.Tensor | None = None):
+    def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor,
+                include_direct: bool = True, include_reciprocal: bool = True, dipoles: torch.Tensor | None = None,
+                batch: torch.Tensor | None = None):
         """Compute the interaction.
 
         Parameters
@@ -227,7 +228,7 @@ class CoulombPME(torch.nn.Module):
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
                       box_vectors: torch.Tensor, include_direct: bool = True, include_reciprocal: bool = True,
-                      dipoles: torch.Tensor = None):
+                      dipoles: torch.Tensor | None = None):
         """Compute the electric field produced by the particles at a set of points.
 
         Parameters
@@ -280,7 +281,7 @@ class CoulombPME(torch.nn.Module):
             pos_deriv = torch.zeros_like(field_positions)
             if self.use_triton:
                 g = lambda meta: (triton.cdiv(num_points, meta['BLOCK_SIZE']),)
-                interp_derivatives_kernel[g](pos_deriv, None, grid, grid_size_tensor, data, ddata, ti, None, num_points, self.order, 256)
+                interp_derivatives_kernel[g](pos_deriv, None, grid, grid_size_tensor, data, ddata, ti, num_points, self.order, 256)
             else:
                 interp_derivatives(pos_deriv, None, grid, grid_size_tensor, data, ddata, ti, None, self.order)
             field -= torch.matmul(pos_deriv, (grid_size_tensor.view((1,3))*recip_box_vectors).T)
@@ -288,7 +289,7 @@ class CoulombPME(torch.nn.Module):
 
 
 def compute_spline_coefficients(pme: CoulombPME, positions: torch.Tensor, recip_box_vectors: torch.Tensor,
-                                grid_size_tensor: torch.Tensor, batch: torch.Tensor):
+                                grid_size_tensor: torch.Tensor, batch: torch.Tensor | None):
     device = pme.xmoduli.device
     if batch is None:
         t = positions@recip_box_vectors
@@ -322,8 +323,8 @@ def compute_spline_coefficients(pme: CoulombPME, positions: torch.Tensor, recip_
     return ti, dr, data, ddata
 
 
-def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor,
-                       box_vectors: torch.Tensor, batch: torch.Tensor, num_systems: int):
+def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor | None,
+                       box_vectors: torch.Tensor, batch: torch.Tensor | None, num_systems: int):
     device = pme.xmoduli.device
     grid_size = (pme.gridx, pme.gridy, pme.gridz)
     grid_size_tensor = torch.tensor(grid_size, device=device)
@@ -338,25 +339,22 @@ def reciprocal_forward(pme: CoulombPME, positions: torch.Tensor, charges: torch.
         grid = torch.zeros(grid_size, dtype=torch.float32, device=device)
     else:
         grid = torch.zeros((num_systems,)+grid_size, dtype=torch.float32, device=device)
-    if pme.max_multipole == 'charge':
-        transformed_dipoles = None
-    else:
-        if batch is None:
-            transformed_dipoles = (dipoles@recip_box_vectors)*grid_size_tensor
-        else:
-            transformed_dipoles = torch.einsum('ij,ijk->ik', dipoles, recip_box_vectors[batch])*grid_size_tensor
     if pme.use_triton:
         block_size = triton.next_power_of_2(order*order*order)
         if pme.max_multipole == 'charge':
-            spread_charge_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, data, ti, batch,
-                                                             num_particles, order, block_size)
+            transformed_dipoles = None
+            spread_charge_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, data, ti, num_particles,
+                                                             order, block_size)
         else:
+            transformed_dipoles = torch.matmul(dipoles, recip_box_vectors)*grid_size_tensor
             spread_dipoles_kernel[lambda meta: (block_size,)](grid, grid_size_tensor, charges, transformed_dipoles,
-                                                              data, ddata, ti, batch, num_particles, order, block_size)
+                                                              data, ddata, ti, num_particles, order, block_size)
     else:
         if pme.max_multipole == 'charge':
+            transformed_dipoles = None
             spread_charge(grid, grid_size_tensor, charges, data, ti, batch, order)
         else:
+            transformed_dipoles = torch.matmul(dipoles, recip_box_vectors)*grid_size_tensor
             spread_dipoles(grid, grid_size_tensor, charges, transformed_dipoles, data, ddata, ti, batch, order)
 
     # Take the Fourier transform, perform the convolution, and calculate the energy.
@@ -396,8 +394,8 @@ class ReciprocalFunction(torch.autograd.Function):
     kernels to make the calculation faster.
     """
     @staticmethod
-    def forward(ctx, pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor,
-                box_vectors: torch.Tensor, batch: torch.Tensor, num_systems: int):
+    def forward(ctx, pme: CoulombPME, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor | None,
+                box_vectors: torch.Tensor, batch: torch.Tensor | None, num_systems: int):
         recip_box_vectors, ti, dr, data, ddata, kz, recip_grid, eterm, transformed_dipoles = \
                 reciprocal_forward(pme, positions, charges, dipoles, box_vectors, batch, num_systems)
         scale = ((kz > 0)*(kz <= (pme.gridz-1)/2) + 1)
@@ -423,45 +421,39 @@ class ReciprocalFunction(torch.autograd.Function):
         # Compute the derivatives.
 
         num_particles = positions.shape[0]
-        if batch is None:
-            coord_transform = (grid_size_tensor.view((1,3))*recip_box_vectors).T
-        else:
-            coord_transform = (grid_size_tensor.view((1,3))*recip_box_vectors).transpose(1, 2)
         if pme.max_multipole == 'charge':
             pos_deriv = torch.zeros_like(positions) if ctx.needs_input_grad[1] else None
             charge_deriv = torch.zeros_like(charges) if ctx.needs_input_grad[2] else None
             dipole_deriv = None
             if pme.use_triton:
                 g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
-                interp_derivatives_kernel[g](pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, batch, num_particles, order, 256)
+                interp_derivatives_kernel[g](pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, num_particles, order, 256)
             else:
                 interp_derivatives(pos_deriv, charge_deriv, grid, grid_size_tensor, data, ddata, ti, batch, order)
             if pos_deriv is not None:
                 if batch is None:
-                    pos_deriv = grad_outputs[0]*charges.view((-1,1))*(pos_deriv@coord_transform)
+                    coord_transform = (grid_size_tensor.view((1,3))*recip_box_vectors).T
+                    pos_deriv = grad_outputs[0]*charges.view((-1,1))*torch.matmul(pos_deriv, coord_transform)
                 else:
+                    coord_transform = (grid_size_tensor.view((1,3))*recip_box_vectors).transpose(1, 2)
                     pos_deriv = (grad_outputs[0][batch]*charges).view((-1,1))*torch.einsum('ij,ijk->ik', pos_deriv, coord_transform[batch])
             if charge_deriv is not None:
                 charge_deriv *= grad_outputs[0]
         else:
             phi = torch.zeros((positions.shape[0], 10), dtype=torch.float32, device=positions.device)
             interp_dipole_derivatives(phi, grid, grid_size_tensor, data, ddata, ti, dr, batch, order, pme.use_triton)
+            coord_transform = (grid_size_tensor.view((1,3))*recip_box_vectors).T
             fx = charges*phi[:,1] + transformed_dipoles[:,0]*phi[:,4] + transformed_dipoles[:,1]*phi[:,7] + transformed_dipoles[:,2]*phi[:,8]
             fy = charges*phi[:,2] + transformed_dipoles[:,0]*phi[:,7] + transformed_dipoles[:,1]*phi[:,5] + transformed_dipoles[:,2]*phi[:,9]
             fz = charges*phi[:,3] + transformed_dipoles[:,0]*phi[:,8] + transformed_dipoles[:,1]*phi[:,9] + transformed_dipoles[:,2]*phi[:,6]
-            f = torch.stack([fx, fy, fz], dim=1)
-            if ctx.needs_input_grad[1]:
-                if batch is None:
-                    pos_deriv = grad_outputs[0].view((-1,1))*(f@coord_transform)
-                else:
-                    pos_deriv = grad_outputs[0][batch].view((-1,1))*torch.einsum('ij,ijk->ik', f, coord_transform[batch])
+            pos_deriv = grad_outputs[0]*torch.matmul(torch.stack([fx, fy, fz], dim=1), coord_transform)
             charge_deriv = phi[:,0]*grad_outputs[0] if ctx.needs_input_grad[2] else None
-            dipole_deriv = grad_outputs[0]*(phi[:,1:4]@coord_transform) if ctx.needs_input_grad[3] else None
+            dipole_deriv = grad_outputs[0]*torch.matmul(phi[:,1:4], coord_transform) if ctx.needs_input_grad[3] else None
         return None, pos_deriv, charge_deriv, dipole_deriv, None, None, None
 
 
 def spread_charge(grid: torch.Tensor, grid_size_tensor: torch.Tensor, charges: torch.Tensor,
-                  data: torch.Tensor, ti: torch.Tensor, batch: torch.Tensor, order: int):
+                  data: torch.Tensor, ti: torch.Tensor, batch: torch.Tensor | None, order: int):
     for ix in range(order):
         xindex = (ti[:,0]+ix) % grid_size_tensor[0]
         for iy in range(order):
@@ -478,7 +470,7 @@ def spread_charge(grid: torch.Tensor, grid_size_tensor: torch.Tensor, charges: t
 
 def spread_dipoles(grid: torch.Tensor, grid_size_tensor: torch.Tensor, charges: torch.Tensor,
                    dipoles: torch.Tensor, data: torch.Tensor, ddata: torch.Tensor, ti: torch.Tensor,
-                   batch: torch.Tensor, order: int):
+                   batch: torch.Tensor | None, order: int):
     for ix in range(order):
         xindex = (ti[:,0]+ix) % grid_size_tensor[0]
         for iy in range(order):
@@ -498,7 +490,7 @@ def spread_dipoles(grid: torch.Tensor, grid_size_tensor: torch.Tensor, charges: 
 
 def interp_derivatives(pos_deriv: torch.Tensor | None, charge_deriv: torch.Tensor | None, grid: torch.Tensor,
                        grid_size_tensor: torch.Tensor, data: torch.Tensor, ddata: torch.Tensor, ti: torch.Tensor,
-                       batch: torch.Tensor, order: int):
+                       batch: torch.Tensor | None, order: int):
     for ix in range(order):
         xindex = (ti[:,0]+ix) % grid_size_tensor[0]
         for iy in range(order):
@@ -518,8 +510,8 @@ def interp_derivatives(pos_deriv: torch.Tensor | None, charge_deriv: torch.Tenso
 
 
 def interp_dipole_derivatives(phi: torch.Tensor, grid: torch.Tensor, grid_size_tensor: torch.Tensor, data: torch.Tensor,
-                              ddata: torch.Tensor, ti: torch.Tensor, dr: torch.Tensor, batch: torch.Tensor, order: int,
-                              use_triton: bool):
+                              ddata: torch.Tensor, ti: torch.Tensor, dr: torch.Tensor, batch: torch.Tensor | None,
+                              order: int, use_triton: bool):
     # Compute the second derivative of the spline.
 
     d2data = torch.zeros_like(ddata)
@@ -540,7 +532,7 @@ def interp_dipole_derivatives(phi: torch.Tensor, grid: torch.Tensor, grid_size_t
     if use_triton:
         num_particles = phi.shape[0]
         g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
-        interp_dipoles_kernel[g](phi, grid, grid_size_tensor, data, ddata, d2data, ti, batch, num_particles, order, 256)
+        interp_dipoles_kernel[g](phi, grid, grid_size_tensor, data, ddata, d2data, ti, num_particles, order, 256)
     else:
         for ix in range(order):
             xindex = (ti[:,0]+ix) % grid_size_tensor[0]

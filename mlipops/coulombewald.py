@@ -118,8 +118,9 @@ class CoulombEwald(torch.nn.Module):
         mask = (wave_indices[:,0] > 0) | (wave_indices[:,1] > 0) | ((wave_indices[:,1] == 0) & (wave_indices[:,2] > 0))
         self.wave_indices = torch.nn.Parameter(wave_indices[mask].to(torch.float32), requires_grad=False)
 
-    def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor, include_direct: bool = True,
-                include_reciprocal: bool = True, dipoles: torch.Tensor = None, batch: torch.Tensor | None = None):
+    def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor,
+                include_direct: bool = True, include_reciprocal: bool = True, dipoles: torch.Tensor | None = None,
+                batch: torch.Tensor | None = None):
         """Compute the interaction.
 
         Parameters
@@ -188,7 +189,7 @@ class CoulombEwald(torch.nn.Module):
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
                       box_vectors: torch.Tensor, include_direct: bool = True, include_reciprocal: bool = True,
-                      dipoles: torch.Tensor = None):
+                      dipoles: torch.Tensor | None = None):
         """Compute the electric field produced by the particles at a set of points.
 
         Parameters
@@ -239,7 +240,7 @@ class CoulombEwald(torch.nn.Module):
         return self.prefactor*field
 
 
-    def _compute_recip_sums(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor,
+    def _compute_recip_sums(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor | None,
                             box_vectors: torch.Tensor):
         recip_box_vectors = torch.linalg.inv(box_vectors)
         k = self.wave_indices@(2*torch.pi*recip_box_vectors.T)
@@ -256,14 +257,14 @@ class CoulombEwald(torch.nn.Module):
         return sum1, sum2, k, ak, recip_box_vectors
 
 
-    def _compute_recip_energy(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor,
+    def _compute_recip_energy(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor | None,
                               box_vectors: torch.Tensor):
         sum1, sum2, _, ak, recip_box_vectors = self._compute_recip_sums(positions, charges, dipoles, box_vectors)
         energy = torch.sum(ak*(sum1**2 + sum2**2))
         return energy*4*torch.pi*recip_box_vectors.diag().prod()
 
 
-    def _compute_recip_energy_batch(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor,
+    def _compute_recip_energy_batch(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor | None,
                                     box_vectors: torch.Tensor, batch: torch.Tensor | None, num_systems: int):
         recip_box_vectors = torch.linalg.inv(box_vectors)
         k = self.wave_indices.unsqueeze(0)@(2*torch.pi*recip_box_vectors.transpose(1, 2))

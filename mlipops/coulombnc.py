@@ -64,7 +64,7 @@ class CoulombNC(torch.nn.Module):
             raise ValueError(f'Illegal value for max_multipole: {max_multipole}')
         self.pairwise = Pairwise(computation, None, exclusions)
 
-    def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor = None,
+    def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor | None = None,
                 batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
@@ -96,7 +96,7 @@ class CoulombNC(torch.nn.Module):
         return self.prefactor*energy
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
-                      dipoles: torch.Tensor = None) -> torch.Tensor:
+                      dipoles: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the electric field produced by the particles at a set of points.
 
         Parameters
