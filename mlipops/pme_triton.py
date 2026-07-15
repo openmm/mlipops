@@ -4,7 +4,7 @@ import triton.language as tl
 
 @triton.jit
 def spread_charge_kernel(grid_ptr, grid_size_ptr: tl.const, charges_ptr: tl.const, data_ptr: tl.const, ti_ptr: tl.const,
-                         num_particles: tl.constexpr, order: tl.constexpr, BLOCKSIZE: tl.constexpr):
+                         batch_ptr: tl.const, num_particles: tl.constexpr, order: tl.constexpr, BLOCKSIZE: tl.constexpr):
     pid = tl.program_id(axis=0)
     point_index = tl.arange(0, BLOCKSIZE)
     mask = point_index < order*order*order
@@ -23,13 +23,18 @@ def spread_charge_kernel(grid_ptr, grid_size_ptr: tl.const, charges_ptr: tl.cons
         dy = tl.load(data_ptr+3*num_particles*iy+3*particle+1, mask=mask)
         dz = tl.load(data_ptr+3*num_particles*iz+3*particle+2, mask=mask)
         add = charge*dx*dy*dz
-        tl.atomic_add(grid_ptr + xindex*gridy*gridz + yindex*gridz + zindex, add, mask=mask)
+        if batch_ptr is None:
+            base_ptr = grid_ptr
+        else:
+            batch = tl.load(batch_ptr+particle)
+            base_ptr = grid_ptr + batch*gridx*gridy*gridz
+        tl.atomic_add(base_ptr + xindex*gridy*gridz + yindex*gridz + zindex, add, mask=mask)
 
 
 @triton.jit
 def spread_dipoles_kernel(grid_ptr, grid_size_ptr: tl.const, charges_ptr: tl.const, dipoles_ptr: tl.const,
-                         data_ptr: tl.const, ddata_ptr: tl.const, ti_ptr: tl.const, num_particles: tl.constexpr,
-                         order: tl.constexpr, BLOCKSIZE: tl.constexpr):
+                         data_ptr: tl.const, ddata_ptr: tl.const, ti_ptr: tl.const, batch_ptr: tl.const,
+                         num_particles: tl.constexpr, order: tl.constexpr, BLOCKSIZE: tl.constexpr):
     pid = tl.program_id(axis=0)
     point_index = tl.arange(0, BLOCKSIZE)
     mask = point_index < order*order*order
@@ -54,12 +59,17 @@ def spread_dipoles_kernel(grid_ptr, grid_size_ptr: tl.const, charges_ptr: tl.con
         ddy = tl.load(ddata_ptr+3*num_particles*iy+3*particle+1, mask=mask)
         ddz = tl.load(ddata_ptr+3*num_particles*iz+3*particle+2, mask=mask)
         add = charge*dx*dy*dz + dipolex*ddx*dy*dz + dipoley*dx*ddy*dz + dipolez*dx*dy*ddz
-        tl.atomic_add(grid_ptr + xindex*gridy*gridz + yindex*gridz + zindex, add, mask=mask)
+        if batch_ptr is None:
+            base_ptr = grid_ptr
+        else:
+            batch = tl.load(batch_ptr+particle)
+            base_ptr = grid_ptr + batch*gridx*gridy*gridz
+        tl.atomic_add(base_ptr + xindex*gridy*gridz + yindex*gridz + zindex, add, mask=mask)
 
 
 @triton.jit
 def interp_derivatives_kernel(pos_deriv_ptr, charge_deriv_ptr, grid_ptr: tl.const, grid_size_ptr: tl.const, data_ptr: tl.const, ddata_ptr: tl.const,
-                              ti_ptr: tl.const, num_particles: tl.constexpr, order: tl.constexpr, BLOCK_SIZE: tl.constexpr):
+                              ti_ptr: tl.const, batch_ptr: tl.const, num_particles: tl.constexpr, order: tl.constexpr, BLOCK_SIZE: tl.constexpr):
     pid = tl.program_id(axis=0)
     block_start = pid*BLOCK_SIZE
     particle = block_start + tl.arange(0, BLOCK_SIZE)
@@ -76,13 +86,18 @@ def interp_derivatives_kernel(pos_deriv_ptr, charge_deriv_ptr, grid_ptr: tl.cons
         pos_derivz = tl.zeros((BLOCK_SIZE,), tl.float32)
     if charge_deriv_ptr is not None:
         charge_deriv = tl.zeros((BLOCK_SIZE,), tl.float32)
+    if batch_ptr is None:
+        base_ptr = grid_ptr
+    else:
+        batch = tl.load(batch_ptr+particle, mask=mask)
+        base_ptr = grid_ptr + batch*gridx*gridy*gridz
     for ix in tl.range(0, order):
         xindex = (tix+ix) % gridx
         for iy in tl.range(0, order):
             yindex = (tiy+iy) % gridy
             for iz in tl.range(0, order):
                 zindex = (tiz+iz) % gridz
-                g = tl.load(grid_ptr + xindex*gridy*gridz + yindex*gridz + zindex, mask=mask)
+                g = tl.load(base_ptr + xindex*gridy*gridz + yindex*gridz + zindex, mask=mask)
                 dx = tl.load(data_ptr+3*num_particles*ix+3*particle, mask=mask)
                 dy = tl.load(data_ptr+3*num_particles*iy+3*particle+1, mask=mask)
                 dz = tl.load(data_ptr+3*num_particles*iz+3*particle+2, mask=mask)
@@ -105,7 +120,7 @@ def interp_derivatives_kernel(pos_deriv_ptr, charge_deriv_ptr, grid_ptr: tl.cons
 
 @triton.jit
 def interp_dipoles_kernel(phi_ptr, grid_ptr: tl.const, grid_size_ptr: tl.const, data_ptr: tl.const, ddata_ptr: tl.const,
-                          d2data_ptr: tl.const, ti_ptr: tl.const, num_particles: tl.constexpr, order: tl.constexpr,
+                          d2data_ptr: tl.const, ti_ptr: tl.const, batch_ptr: tl.const, num_particles: tl.constexpr, order: tl.constexpr,
                           BLOCK_SIZE: tl.constexpr):
     pid = tl.program_id(axis=0)
     block_start = pid*BLOCK_SIZE
@@ -127,13 +142,18 @@ def interp_dipoles_kernel(phi_ptr, grid_ptr: tl.const, grid_size_ptr: tl.const, 
     phi7 = tl.zeros((BLOCK_SIZE,), tl.float32)
     phi8 = tl.zeros((BLOCK_SIZE,), tl.float32)
     phi9 = tl.zeros((BLOCK_SIZE,), tl.float32)
+    if batch_ptr is None:
+        base_ptr = grid_ptr
+    else:
+        batch = tl.load(batch_ptr+particle, mask=mask)
+        base_ptr = grid_ptr + batch*gridx*gridy*gridz
     for ix in tl.range(0, order):
         xindex = (tix+ix) % gridx
         for iy in tl.range(0, order):
             yindex = (tiy+iy) % gridy
             for iz in tl.range(0, order):
                 zindex = (tiz+iz) % gridz
-                g = tl.load(grid_ptr + xindex*gridy*gridz + yindex*gridz + zindex, mask=mask)
+                g = tl.load(base_ptr + xindex*gridy*gridz + yindex*gridz + zindex, mask=mask)
                 dx = tl.load(data_ptr+3*num_particles*ix+3*particle, mask=mask)
                 dy = tl.load(data_ptr+3*num_particles*iy+3*particle+1, mask=mask)
                 dz = tl.load(data_ptr+3*num_particles*iz+3*particle+2, mask=mask)

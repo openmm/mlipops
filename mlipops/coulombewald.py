@@ -265,9 +265,6 @@ class CoulombEwald(torch.nn.Module):
 
     def _compute_recip_energy_batch(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor,
                                     box_vectors: torch.Tensor, batch: torch.Tensor | None, num_systems: int):
-        index = (batch[:-1] != batch[1:]).nonzero().flatten()
-        start_index = torch.nn.functional.pad(index+1, pad=(1,0))
-        end_index = torch.nn.functional.pad(start_index[1:], pad=(0,1), value=batch.shape[0])
         recip_box_vectors = torch.linalg.inv(box_vectors)
         k = self.wave_indices.unsqueeze(0)@(2*torch.pi*recip_box_vectors.transpose(1, 2))
         phase = torch.einsum('ijk,ik->ji', k[batch], positions)
