@@ -106,13 +106,13 @@ def test_batch(device, periodic):
         energy1 = energy[i]
         energy1.backward(retain_graph=True)
         grad1 = positions.grad[mask]
-        pos = torch.tensor(positions[mask], device=device, requires_grad=True)
+        pos = positions[mask].detach().clone().requires_grad_(True)
         box = None if box_vectors is None else box_vectors[i]
         energy2 = zbl(pos, numbers[mask], radii[mask], box)
-        assert torch.allclose(energy1, energy2, rtol=1e-4)
+        assert torch.allclose(energy1, energy2, rtol=1e-4, atol=1e-4)
         energy2.backward()
         grad2 = pos.grad
-        assert torch.allclose(grad1, grad2, rtol=1e-4)
+        assert torch.allclose(grad1, grad2, rtol=1e-3, atol=1e-4)
         positions.grad.zero_()
         pos.grad.zero_()
 

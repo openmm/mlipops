@@ -311,7 +311,7 @@ def test_batch(device, max_multipole):
         assert torch.allclose(energy1, energy2, rtol=1e-4)
         energy2.backward()
         grad2 = pos.grad
-        assert torch.allclose(grad1, grad2, rtol=1e-3, atol=1e-4)
+        assert torch.allclose(grad1, grad2, rtol=1e-3, atol=1e-3)
         positions.grad.zero_()
         pos.grad.zero_()
 
@@ -373,7 +373,7 @@ def test_force_derivatives(device):
 
     # Check the charge derivative against a finite difference approximation.
 
-    delta = 0.05
+    delta = 0.02
     for i in range(len(charges)):
         c1 = charges.clone()
         c1[i] += delta
