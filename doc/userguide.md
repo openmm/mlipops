@@ -262,7 +262,7 @@ training data.
 
 The dispersion calculation depends on the atomic numbers of the interacting atoms.  In this example, we assume `numbers`
 is a tensor containing the atomic numbers.  It also depends on the covalent radii of the atoms.  Given the atomic
-numbers, you can use the function `get_covalent_radii()` to look up the correspond radii.
+numbers, you can use the function `get_covalent_radii()` to look up the corresponding radii.
 
 ### Nuclear Repulsion
 
