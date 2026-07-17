@@ -82,7 +82,7 @@ class NeighborList(torch.nn.Module):
     def padding(self):
         return self._padding
 
-    def forward(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, batch: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(self, positions: torch.Tensor, box_vectors: torch.Tensor | None = None, batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the neighbor list.
 
         Parameters

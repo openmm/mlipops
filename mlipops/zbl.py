@@ -52,7 +52,7 @@ class ZBL(torch.nn.Module):
         self.pairwise = Pairwise(ZBLCalculator(bohr_radius), None, None)
 
     def forward(self, positions: torch.Tensor, atomic_numbers: torch.Tensor, radii: torch.Tensor | None,
-                box_vectors: torch.Tensor, batch: torch.Tensor | None = None) -> torch.Tensor:
+                box_vectors: torch.Tensor | None = None, batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters

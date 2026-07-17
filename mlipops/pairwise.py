@@ -71,7 +71,7 @@ class Pairwise(torch.nn.Module):
                     exclusion_indices[i][j] = indices[i][j]
             self.register_buffer('exclusion_indices', exclusion_indices)
 
-    def forward(self, positions: torch.Tensor, parameters: Any, pairs: torch.Tensor, box_vectors: torch.Tensor | None,
+    def forward(self, positions: torch.Tensor, parameters: Any, pairs: torch.Tensor, box_vectors: torch.Tensor | None = None,
                 batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
