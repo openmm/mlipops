@@ -84,7 +84,8 @@ class DFTD3(torch.nn.Module):
         self.pairwise = Pairwise(DFTD3Calculator(s8, a1, a2, bohr_radius), cutoff, None)
 
     def forward(self, positions: torch.Tensor, atomic_numbers: torch.Tensor, covalent_radii: torch.Tensor,
-                box_vectors: torch.Tensor, batch: torch.Tensor | None = None, need_second_derivatives: bool = False) -> torch.Tensor:
+                box_vectors: torch.Tensor | None = None, batch: torch.Tensor | None = None,
+                need_second_derivatives: bool = False) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters
