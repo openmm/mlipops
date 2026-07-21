@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mlipops"
-version = "0.0.1"
+version = "0.5.0"
 dependencies = ["torch"]
 authors = [{name = "Peter Eastman"}]
 description = "PyTorch operations for use in creating machine learning interatomic potentials"
 license = "MIT"
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: GPU",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",

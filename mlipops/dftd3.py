@@ -32,15 +32,7 @@ class DFTD3(torch.nn.Module):
     slower, but allow for arbitrary derivatives.
 
     When you create an instance of this class, you must specify the values of Coulomb's constant 1/(4*pi*eps0) and the
-    Bohr radius.  The values you specify set the unit system.  Here are their values for some common units.
-
-    kJ/mol, nm: 138.935457, 0.052917721
-    kJ/mol, A: 1389.35457, 0.52917721
-    kcal/mol, nm: 33.2063713, 0.052917721
-    kcal/mol, A: 332.063713, 0.52917721
-    eV, nm: 1.43996454, 0.052917721
-    eV, A: 14.3996454, 0.52917721
-    hartree, bohr: 1.0, 1.0
+    Bohr radius.  The values you specify set the unit system.  See the User Guide for the values in common unit systems.
     """
     def __init__(self, neighbor_list: NeighborList, s8: float, a1: float, a2: float, prefactor: float, bohr_radius: float):
         """Create on object for computing the DFT-D3(BJ) dispersion potential.

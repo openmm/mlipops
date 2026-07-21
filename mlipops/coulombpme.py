@@ -43,16 +43,8 @@ class CoulombPME(torch.nn.Module):
     space.  To do this, call compute_field().
 
     When you create an instance of this class, you must specify the value of Coulomb's constant 1/(4*pi*eps0).  Its
-    value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  Here are
-    the values for some common units.
-
-    kJ/mol, nm: 138.935457
-    kJ/mol, A: 1389.35457
-    kcal/mol, nm: 33.2063713
-    kcal/mol, A: 332.063713
-    eV, nm: 1.43996454
-    eV, A: 14.3996454
-    hartree, bohr: 1.0
+    value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  See the
+    User Guide for the values in common unit systems.
     """
     def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor, gridx: int, gridy: int, gridz: int,
                  order: int, alpha: float, prefactor: float, cutoff: float | None = None, max_multipole='charge'):
@@ -162,7 +154,7 @@ class CoulombPME(torch.nn.Module):
 
     def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor, include_direct: bool = True,
                 include_reciprocal: bool = True, dipoles: torch.Tensor | None = None,
-                batch: torch.Tensor | None = None):
+                batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
         Parameters
@@ -228,7 +220,7 @@ class CoulombPME(torch.nn.Module):
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
                       box_vectors: torch.Tensor, include_direct: bool = True, include_reciprocal: bool = True,
-                      dipoles: torch.Tensor | None = None):
+                      dipoles: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the electric field produced by the particles at a set of points.
 
         Parameters
