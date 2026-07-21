@@ -202,7 +202,7 @@ class NeighborList(torch.nn.Module):
         indices = torch.cat((i.view((-1, 1, 1)).expand((n, n, 1)), i.view((1, -1, 1)).expand((n, n, 1))), axis=2)
         return indices[mask]
 
-    def _compute_large_single(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float) -> torch.Tensor:
+    def _compute_large_single(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float) -> torch.Tensor | None:
         """This implements a more complex algorithm for identifying neighbors.  On small systems it is slower than
         _compute_small(), but it becomes much faster as the number of particles grows.  It requires Triton, and
         therefore is only used on GPUs.
@@ -263,7 +263,7 @@ class NeighborList(torch.nn.Module):
         return output
 
     def _compute_small_batch(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float | None,
-                             batch: torch.Tensor) -> torch.Tensor:
+                             batch: torch.Tensor) -> torch.Tensor | None:
         """This implements a brute force algorithm to identify neighbors by testing all possible pairs within each
         system.  It is fast for small numbers of particles but scales as O(n^2), making it less suitable for larger
         systems.

@@ -7,7 +7,7 @@ except ImportError:
     has_triton = False
 
 
-def periodic_displacements(displacements: torch.Tensor, box_vectors: torch.Tensor | None):
+def periodic_displacements(displacements: torch.Tensor, box_vectors: torch.Tensor | None) -> torch.Tensor:
     """Apply periodic boundary conditions to a 1D to 2D set of displacement vectors.
 
     Parameters
@@ -41,7 +41,7 @@ def periodic_displacements(displacements: torch.Tensor, box_vectors: torch.Tenso
     return displacements
 
 
-def batch_periodic_displacements(displacements: torch.Tensor, batch: torch.Tensor, box_vectors: torch.Tensor | None):
+def batch_periodic_displacements(displacements: torch.Tensor, batch: torch.Tensor, box_vectors: torch.Tensor | None) -> torch.Tensor:
     """Apply periodic boundary conditions to displacement vectors for a batch of systems.
 
     Parameters
@@ -74,7 +74,7 @@ def batch_periodic_displacements(displacements: torch.Tensor, batch: torch.Tenso
     return displacements
 
 
-def pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, box_vectors: torch.Tensor | None):
+def pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, box_vectors: torch.Tensor | None) -> torch.Tensor:
     """Compute the displacement between pairs of points, optionally taking periodic boundary conditions into
     account.
 
@@ -97,7 +97,7 @@ def pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, box_vec
 
 
 def batch_pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, batch: torch.Tensor,
-                                 box_vectors: torch.Tensor | None):
+                                 box_vectors: torch.Tensor | None) -> torch.Tensor:
     """Compute the displacement between pairs of points in a batch of systems, optionally taking periodic boundary
     conditions into account.
 
@@ -124,7 +124,7 @@ def batch_pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, b
     return displacements
 
 
-def get_covalent_radii(atomic_numbers: torch.Tensor, bohr_radius: float):
+def get_covalent_radii(atomic_numbers: torch.Tensor, bohr_radius: float) -> torch.Tensor:
     """Get the covalent radii for a set of atoms based on their atomic numbers.
 
     Covalent radii are not uniquely defined.  Various sets of values have been published.  The ones used here are chosen
