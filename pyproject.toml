@@ -23,4 +23,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/peastman/mlipops"
+Repository = "https://github.com/openmm/mlipops"
+
+[tool.setuptools.package-data]
+mlipops = ["*.pt"]

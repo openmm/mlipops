@@ -19,6 +19,21 @@ The operations it provides can roughly be divided into two categories.
 - High level operations implement specific physical interactions, such as Coulomb or dispersion.  They are implemented
   using the low level operations, which provide common infrastructure for the library.
 
+## Installation
+
+You can install MLIPOps from PyPI with the command
+
+```
+pip install mlipops
+```
+
+Alternatively, if you want to install from source, check out the code from https://github.com/openmm/mlipops, `cd` to
+the root directory, and type
+
+```
+pip install .
+```
+
 ## Low Level Operations
 
 ### Neighbor Lists
@@ -40,7 +55,7 @@ pairs = neighbor_list(positions)
 ```
 
 `NeighborList` provides automatic caching of results.  If you pass the same tensor of positions to it twice in a row, it
-it will immediately return the cached neighbors without needing to recompute them.  In addition, you can optionally
+will immediately return the cached neighbors without needing to recompute them.  In addition, you can optionally
 specify a padding distance.
 
 ```python
@@ -70,7 +85,7 @@ To use it, first define a Python function to compute the interaction.  For examp
 Coulomb energy $q_1 q_2/r$.
 
 ```python
-def coulomb(pairs, r, delta, charges):
+def coulomb(pairs, r, deltas, charges):
     return charges[pairs[:,0]]*charges[pairs[:,1]]/r
 ````
 

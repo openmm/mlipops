@@ -50,9 +50,9 @@ class CoulombEwald(torch.nn.Module):
         kmaxx: int
             the index of the maximum wave vector in the x direction.  All vectors between -kmaxx and kmaxx are included.
         kmaxy: int
-            the index of the maximum wave vector in the x direction.  All vectors between -kmaxy and kmaxy are included.
+            the index of the maximum wave vector in the y direction.  All vectors between -kmaxy and kmaxy are included.
         kmaxz: int
-            the index of the maximum wave vector in the x direction.  All vectors between -kmaxz and kmaxz are included.
+            the index of the maximum wave vector in the z direction.  All vectors between -kmaxz and kmaxz are included.
         alpha: float
             the coefficient of the erf() function used to separate the energy into direct and reciprocal space terms
         prefactor: float
