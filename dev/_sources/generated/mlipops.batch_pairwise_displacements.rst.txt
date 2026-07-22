@@ -1,0 +1,6 @@
+﻿mlipops.batch\_pairwise\_displacements
+======================================
+
+.. currentmodule:: mlipops
+
+.. autofunction:: batch_pairwise_displacements

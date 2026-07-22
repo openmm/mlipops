@@ -1,0 +1,774 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>User Guide &#8212; MLIPOps  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'userguide';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API Documentation" href="api.html" />
+    <link rel="prev" title="MLIPOps" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="dev" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">MLIPOps  documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/openmm/mlipops" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api.html">
+    API Documentation
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/openmm/mlipops" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">User Guide</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="user-guide">
+<h1>User Guide<a class="headerlink" href="#user-guide" title="Link to this heading">#</a></h1>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">#</a></h2>
+<p>MLIPOps is a collection of PyTorch modules for use in creating machine learning interatomic potentials (MLIPs).  It
+is written in Python using PyTorch and Triton to do calculations.  This design has important benefits.</p>
+<ul class="simple">
+<li><p>Completely portable.  It works on any computer that PyTorch can run on.</p></li>
+<li><p>Fast performance on any hardware that Triton supports.</p></li>
+<li><p>Very easy to install.  It’s pure Python with nothing that needs to be compiled in advance.</p></li>
+<li><p>Differentiable using standard PyTorch functions.</p></li>
+<li><p>Clean, simple code that is easy to maintain.</p></li>
+<li><p>All operations are compatible with torch.compile.</p></li>
+</ul>
+<p>The operations it provides can roughly be divided into two categories.</p>
+<ul class="simple">
+<li><p>Low level operations are generally useful for implementing a wide range of potentials, both machine learning based and
+physics based.  Examples include neighbor lists, pairwise interactions, and periodic boundary conditions.</p></li>
+<li><p>High level operations implement specific physical interactions, such as Coulomb or dispersion.  They are implemented
+using the low level operations, which provide common infrastructure for the library.</p></li>
+</ul>
+</section>
+<section id="low-level-operations">
+<h2>Low Level Operations<a class="headerlink" href="#low-level-operations" title="Link to this heading">#</a></h2>
+<section id="neighbor-lists">
+<h3>Neighbor Lists<a class="headerlink" href="#neighbor-lists" title="Link to this heading">#</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">NeighborList</span></code> class finds pairs of particles that can interact with each other.  Most often (though not always)
+this means ones within a cutoff distance of each other.  In a typical use, you simply provide the cutoff distance and
+PyTorch device to the constructor.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mlipops</span><span class="w"> </span><span class="kn">import</span> <span class="n">NeighborList</span>
+<span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">NeighborList</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You can then invoke it, providing a tensor of particle positions, and it returns the pairs within the cutoff distance.
+An appropriate algorithm is chosen automatically based on the number of particles and the device.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pairs</span> <span class="o">=</span> <span class="n">neighbor_list</span><span class="p">(</span><span class="n">positions</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">NeighborList</span></code> provides automatic caching of results.  If you pass the same tensor of positions to it twice in a row, it
+it will immediately return the cached neighbors without needing to recompute them.  In addition, you can optionally
+specify a padding distance.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">NeighborList</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In that case, it returns all pairs within <code class="docutils literal notranslate"><span class="pre">cutoff+padding</span></code>.  When you invoke it again, it checks whether any particle
+has moved by more than <code class="docutils literal notranslate"><span class="pre">padding/2</span></code>.  If not, it can immediately return the cached neighbors since they are guaranteed to
+include all pairs within <code class="docutils literal notranslate"><span class="pre">cutoff</span></code>.</p>
+<p>An important consequence of caching is that you must never modify the inputs or outputs in place after calling the
+<code class="docutils literal notranslate"><span class="pre">NeighborList</span></code>.  For example, if you call it once with a tensor of positions, modify the tensor in place to contain
+different positions, and then pass it to the <code class="docutils literal notranslate"><span class="pre">NeighborList</span></code> again, it will incorrectly think the positions have not
+changed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">NeighborList</span></code> has other important features.  It supports periodic boundary conditions and batch processing (both
+discussed below), as well as options for whether to include symmetric pairs and self interactions.  See the API
+documentation for full details.</p>
+</section>
+<section id="pairwise-interactions">
+<h3>Pairwise Interactions<a class="headerlink" href="#pairwise-interactions" title="Link to this heading">#</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">Pairwise</span></code> class can be used to compute arbitrary pairwise interactions between particles.  The interaction can
+depend on the distance and displacement vector between each pair of particles, as well as arbitrary parameters you
+define.</p>
+<p>To use it, first define a Python function to compute the interaction.  For example, the following function computes the
+Coulomb energy <span class="math notranslate nohighlight">\(q_1 q_2/r\)</span>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">coulomb</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">delta</span><span class="p">,</span> <span class="n">charges</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">charges</span><span class="p">[</span><span class="n">pairs</span><span class="p">[:,</span><span class="mi">0</span><span class="p">]]</span><span class="o">*</span><span class="n">charges</span><span class="p">[</span><span class="n">pairs</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]]</span><span class="o">/</span><span class="n">r</span>
+</pre></div>
+</div>
+<p>It takes four arguments.  <code class="docutils literal notranslate"><span class="pre">pairs</span></code> lists the indices of interacting particles in the format returned by <code class="docutils literal notranslate"><span class="pre">NeighborList</span></code>.
+<code class="docutils literal notranslate"><span class="pre">r</span></code> is the distance between each pair of interacting particles.  <code class="docutils literal notranslate"><span class="pre">deltas</span></code> is the displacement vector between each pair.
+The final argument is an arbitrary object of any type you choose containing additional information.  In the above
+example, it would be a 1D tensor containing the charge on each particle.</p>
+<p>Next create a Pairwise object, passing your function to the constructor.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mlipops</span><span class="w"> </span><span class="kn">import</span> <span class="n">Pairwise</span>
+<span class="n">pairwise</span> <span class="o">=</span> <span class="n">Pairwise</span><span class="p">(</span><span class="n">coulomb</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Finally evaluate it, passing in the particle positions, parameters, and pairs.  The result is automatically summed over
+all pairs.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">energy</span> <span class="o">=</span> <span class="n">pairwise</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">charges</span><span class="p">,</span> <span class="n">pairs</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Pairwise</span></code> has other important features.  It supports periodic boundary conditions and batch processing (both discussed
+below), as well as options for excluding particular pairs or applying an additional cutoff.  See the API  documentation
+for full details.</p>
+</section>
+<section id="periodic-boundary-conditions">
+<h3>Periodic Boundary Conditions<a class="headerlink" href="#periodic-boundary-conditions" title="Link to this heading">#</a></h3>
+<p>MLIPOps supports periodic boundary conditions with a triclinic box.  The box is specified by three box vectors, often
+referred to as <strong>a</strong>, <strong>b</strong>, and <strong>c</strong>, stored as the rows of a 3x3 tensor.  In the common case of a rectangular box,
+the diagonal elements contain the box  dimensions and the off-diagonal elements are zero.</p>
+<p>To apply periodic boundary conditions, just pass the box vectors as an additional argument.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pairs</span> <span class="o">=</span> <span class="n">neighbor_list</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">box_vectors</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>There also are functions you can call to apply periodic boundary conditions to displacements, such as
+<code class="docutils literal notranslate"><span class="pre">periodic_displacements()</span></code> and <code class="docutils literal notranslate"><span class="pre">pairwise_displacements()</span></code>.  See the API documentation for details.</p>
+<p>The box vectors must be chosen to satisfy certain requirements.  Roughly speaking, <strong>a</strong>, <strong>b</strong> , and <strong>c</strong> need to
+“mostly” correspond to the x, y, and z axes respectively.  They must have the form <strong>a</strong> = (<span class="math notranslate nohighlight">\(a_x\)</span>, 0, 0), <strong>b</strong> =
+(<span class="math notranslate nohighlight">\(b_x\)</span>, <span class="math notranslate nohighlight">\(b_y\)</span>, 0), and <strong>c</strong> = (<span class="math notranslate nohighlight">\(c_x\)</span>, <span class="math notranslate nohighlight">\(c_y\)</span>, <span class="math notranslate nohighlight">\(c_z\)</span>).  It is always possible to put them into this form by rotating the
+system until <strong>a</strong> is parallel to x and <strong>b</strong> lies in the xy plane.  In addition, they must obey certain constraints:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(a_x\)</span>, <span class="math notranslate nohighlight">\(b_y\)</span>, and <span class="math notranslate nohighlight">\(c_z\)</span> are all positive</p></li>
+<li><p><span class="math notranslate nohighlight">\(a_x \ge 2 |b_x|\)</span></p></li>
+<li><p><span class="math notranslate nohighlight">\(a_x \ge 2 |c_x|\)</span></p></li>
+<li><p><span class="math notranslate nohighlight">\(b_y \ge 2 |c_y|\)</span></p></li>
+</ul>
+<p>This requires the box vectors to be specified in a particular reduced form.  By forming combinations of box vectors (a
+process known as “lattice reduction”), it is always possible to put them in this form without changing the periodic
+system they represent.</p>
+<p>It is your responsibility to ensure that the box vectors you provide satisfy these requirements.  MLIPOps does not check
+them, because doing so would require extra communication between GPU and CPU and hurt performance.  If you provide box
+vectors that violate these requirements, they can lead to incorrect results.</p>
+<p>Another important requirement applies to interactions that involve a cutoff distance between particles.  When used with
+periodic boundary conditions, all dimensions of the periodic box (<span class="math notranslate nohighlight">\(a_x\)</span>, <span class="math notranslate nohighlight">\(b_y\)</span>, and <span class="math notranslate nohighlight">\(c_z\)</span>) must be at least twice the
+cutoff distance.  Otherwise, two copies of a single particle could simultaneously be within the cutoff distance of
+another particle.  If this requirement is violated, it can lead to incorrect results.  MLIPOps does not attempt to
+verify that it is satisfied.  It is your responsibility to make sure the box vectors you provide satisfy it.</p>
+</section>
+<section id="batch-processing">
+<h3>Batch Processing<a class="headerlink" href="#batch-processing" title="Link to this heading">#</a></h3>
+<p>MLIPOps supports batch processing.  Instead of computing an operation for a single system, it computes it for many
+systems at once.  When the individual systems are small, this can be far more efficient than processing them one at a
+time.</p>
+<p>To perform batch processing, combine all the particles from all the systems into a single flat list.  That is, there is
+a single tensor containing all the positions, a single tensor containing all the charges for Coulomb interactions, etc.
+Then pass a <code class="docutils literal notranslate"><span class="pre">batch</span></code> argument to the operation containing the index of the system each particle belongs to.  For example,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pairs</span> <span class="o">=</span> <span class="n">neighbor_list</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="n">batch</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It will perform the calculation in a way that keeps the systems separate.  For example, the neighbor list above will
+only return pairs of particles that are both in the same system.  In addition, operations that return an energy will
+produce a tensor containing a separate energy for each system.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">batch</span></code> argument must be in sorted order, and every system must contain at least one particle.  In other words,
+<code class="docutils literal notranslate"><span class="pre">batch</span></code> should contain one or more 0’s, followed by one or more 1’s, followed by one or more 2’s, and so on.  If these
+requirements are violated, it can lead to incorrect results.</p>
+</section>
+</section>
+<section id="high-level-operations">
+<h2>High Level Operations<a class="headerlink" href="#high-level-operations" title="Link to this heading">#</a></h2>
+<p>High level operations implement specific physical interactions.  They are built using the low level operations described
+above.  They are typically combined with machine learning to help a potential achieve better accuracy or
+transferability.</p>
+<section id="units">
+<h3>Units<a class="headerlink" href="#units" title="Link to this heading">#</a></h3>
+<p>MLIPOps lets you use whatever system of units you want, but to compute physical interactions it needs to know what units
+you are using.  You tell it that by providing the values of two physical constants in your chosen unit system: Coulomb’s
+constant <span class="math notranslate nohighlight">\(\frac{1}{4 \pi \epsilon_0}\)</span> and the Bohr radius <span class="math notranslate nohighlight">\(a_0\)</span>.  The values of these constants depend on the units used
+to measure distance and energy.  Here are their values for a variety of common sets of units.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Energy Unit</p></th>
+<th class="head"><p>Distance Unit</p></th>
+<th class="head"><p>Coulomb’s Constant</p></th>
+<th class="head"><p>Bohr Radius</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>kJ/mol</p></td>
+<td><p>nm</p></td>
+<td><p>138.935457</p></td>
+<td><p>0.052917721</p></td>
+</tr>
+<tr class="row-odd"><td><p>kJ/mol</p></td>
+<td><p>Å</p></td>
+<td><p>1389.35457</p></td>
+<td><p>0.52917721</p></td>
+</tr>
+<tr class="row-even"><td><p>kcal/mol</p></td>
+<td><p>nm</p></td>
+<td><p>33.2063713</p></td>
+<td><p>0.052917721</p></td>
+</tr>
+<tr class="row-odd"><td><p>kcal/mol</p></td>
+<td><p>Å</p></td>
+<td><p>332.063713</p></td>
+<td><p>0.52917721</p></td>
+</tr>
+<tr class="row-even"><td><p>eV</p></td>
+<td><p>nm</p></td>
+<td><p>1.43996454</p></td>
+<td><p>0.052917721</p></td>
+</tr>
+<tr class="row-odd"><td><p>eV</p></td>
+<td><p>Å</p></td>
+<td><p>14.3996454</p></td>
+<td><p>0.52917721</p></td>
+</tr>
+<tr class="row-even"><td><p>hartree</p></td>
+<td><p>bohr</p></td>
+<td><p>1.0</p></td>
+<td><p>1.0</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="coulomb-interactions">
+<h3>Coulomb Interactions<a class="headerlink" href="#coulomb-interactions" title="Link to this heading">#</a></h3>
+<p>MLIPOps offers a variety of methods for computing Coulomb interactions between point charges and dipoles.  They differ
+in how they handle long range interactions and periodic boundary conditions.</p>
+<ul class="simple">
+<li><p><strong>No Cutoff</strong>.  All interactions are included regardless of how far apart they are.  This method is only applicable to
+non-periodic systems.  The cost scales as <span class="math notranslate nohighlight">\(N^2\)</span> in the number of particles, making this mainly useful for smaller
+systems.</p></li>
+<li><p><strong>Reaction Field</strong>.  Interactions beyond a cutoff distance are ignored.  The energy is smoothly reduced to zero at the
+cutoff distance using the reaction field approximation, which assumes everything beyond the cutoff is filled with a
+uniform dielectric.  This method can be applied to both periodic and non-periodic systems and is fast to compute in
+all cases.  Unlike the other methods, only charges are supported, not dipoles.</p></li>
+<li><p><strong>Ewald Summation</strong>.  Ewald summation is used to compute the full set of infinite interactions in a periodic system.</p></li>
+<li><p><strong>Particle Mesh Ewald</strong>.  Particle Mesh Ewald (PME) is used to compute the full set of infinite interactions in a
+periodic system.  This method has better scaling with system size than conventional Ewald summation, making it much
+faster for large systems.  Unlike the other methods, only first derivatives are supported.  This makes it primarily
+useful for inference rather than training.</p></li>
+</ul>
+<p>Here is an example of computing Coulomb interactions with the reaction field method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mlipops</span><span class="w"> </span><span class="kn">import</span> <span class="n">NeighborList</span><span class="p">,</span> <span class="n">CoulombRF</span>
+<span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">NeighborList</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="mf">1.2</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
+<span class="n">coulomb</span> <span class="o">=</span> <span class="n">CoulombRF</span><span class="p">(</span><span class="n">neighbor_list</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="mf">138.935457</span><span class="p">)</span>
+<span class="n">energy</span> <span class="o">=</span> <span class="n">coulomb</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">charges</span><span class="p">,</span> <span class="n">box_vectors</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We begin by creating the <code class="docutils literal notranslate"><span class="pre">NeighborList</span></code> that will be used to find neighbors.  This sets the cutoff distance, the device
+on which to perform calculations, and whether to add padding to improve caching of results.</p>
+<p>Next we create a <code class="docutils literal notranslate"><span class="pre">CoulombRF</span></code> object to perform the calculation.  We provide it with the <code class="docutils literal notranslate"><span class="pre">NeighborList</span></code> and the value of
+Coulomb’s constant.  We can also specify a list of excluded pairs whose interaction should be omitted.  In this case we
+do not use exclusions, so we pass <code class="docutils literal notranslate"><span class="pre">None</span></code> for that argument.</p>
+<p>Finally we compute the energy by invoking the <code class="docutils literal notranslate"><span class="pre">CoulombRF</span></code> object, passing in the positions, charges, and periodic box
+vectors.</p>
+<p>Here is a more complicated example.  In this case we use Ewald summation, include dipoles as well as charges, and
+compute the energy for a batch of systems.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mlipops</span><span class="w"> </span><span class="kn">import</span> <span class="n">NeighborList</span><span class="p">,</span> <span class="n">CoulombEwald</span>
+<span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">NeighborList</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
+<span class="n">coulomb</span> <span class="o">=</span> <span class="n">CoulombEwald</span><span class="p">(</span><span class="n">neighbor_list</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span> <span class="mf">138.935457</span><span class="p">,</span> <span class="n">max_multipole</span><span class="o">=</span><span class="s1">&#39;dipole&#39;</span><span class="p">)</span>
+<span class="n">energy</span> <span class="o">=</span> <span class="n">coulomb</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">charges</span><span class="p">,</span> <span class="n">box_vectors</span><span class="p">,</span> <span class="n">dipoles</span><span class="o">=</span><span class="n">dipoles</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="n">batch</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">CoulombEwald</span></code> class requires a few extra arguments to the constructor: the number of reciprocal space wave vectors
+to include  along each axis, and the coefficient of the <code class="docutils literal notranslate"><span class="pre">erf()</span></code> function used to separate the energy into real space and
+reciprocal space parts.  See the API documentation for details.  We also specify <code class="docutils literal notranslate"><span class="pre">max_multipole='dipole'</span></code> to tell it
+this object will be used to compute energies of dipoles.</p>
+<p>Invoking the object is exactly the same as before, but we include two extra arguments.  <code class="docutils literal notranslate"><span class="pre">dipoles</span></code> contains the dipole
+moment of each particle.  <code class="docutils literal notranslate"><span class="pre">batch</span></code> specifies which system each particle belongs to, as described above.  The returned
+value is a tensor whose length equals the number of systems, containing the energy of each system.</p>
+</section>
+<section id="dispersion">
+<h3>Dispersion<a class="headerlink" href="#dispersion" title="Link to this heading">#</a></h3>
+<p>Dispersion energy can be computed using the DFT-D3(BJ) model.  Using it is similar to the Coulomb examples shown above,
+but with a few differences.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mlipops</span><span class="w"> </span><span class="kn">import</span> <span class="n">NeighborList</span><span class="p">,</span> <span class="n">DFTD3</span><span class="p">,</span> <span class="n">get_covalent_radii</span>
+<span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">NeighborList</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
+<span class="n">d3</span> <span class="o">=</span> <span class="n">DFTD3</span><span class="p">(</span><span class="n">neighbor_list</span><span class="p">,</span> <span class="mf">0.78981345</span><span class="p">,</span> <span class="mf">0.49484001</span><span class="p">,</span> <span class="mf">5.73083694</span><span class="p">,</span> <span class="mf">138.935</span><span class="p">,</span> <span class="mf">0.052917721</span><span class="p">)</span>
+<span class="n">radii</span> <span class="o">=</span> <span class="n">get_covalent_radii</span><span class="p">(</span><span class="n">numbers</span><span class="p">,</span> <span class="mf">0.052917721</span><span class="p">)</span>
+<span class="n">energy</span> <span class="o">=</span> <span class="n">d3</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">numbers</span><span class="p">,</span> <span class="n">radii</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In this example, we did not specify a cutoff distance for the <code class="docutils literal notranslate"><span class="pre">NeighborList</span></code>.  That means all pairs will be included
+regardless of how far apart they are.  This choice is appropriate for small molecules, but the cost scales as <span class="math notranslate nohighlight">\(N^2\)</span> in
+the number of particles.  For larger systems you will generally use a cutoff.</p>
+<p>The last two arguments to the <code class="docutils literal notranslate"><span class="pre">DFTD3</span></code> constructor are the values of Coulomb’s constant and the Bohr radius in our chosen
+unit system.  In addition, we specify the values of three parameters of the DFT-D3(BJ) model called <code class="docutils literal notranslate"><span class="pre">s8</span></code>, <code class="docutils literal notranslate"><span class="pre">a1</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">a2</span></code>.  The values of these parameters are tuned for each DFT functional the model is combined with.  When used with a
+machine learning potential, you should generally use the parameters appropriate to the functional used to generate the
+training data.</p>
+<p>The dispersion calculation depends on the atomic numbers of the interacting atoms.  In this example, we assume <code class="docutils literal notranslate"><span class="pre">numbers</span></code>
+is a tensor containing the atomic numbers.  It also depends on the covalent radii of the atoms.  Given the atomic
+numbers, you can use the function <code class="docutils literal notranslate"><span class="pre">get_covalent_radii()</span></code> to look up the corresponding radii.</p>
+</section>
+<section id="nuclear-repulsion">
+<h3>Nuclear Repulsion<a class="headerlink" href="#nuclear-repulsion" title="Link to this heading">#</a></h3>
+<p>The Ziegler-Biersack-Littmark (ZBL) potential models the screened nuclear repulsion between atoms.  It is frequently
+combined with machine learning potentials to ensure realistic behavior when atoms come very close together, a situation
+for which there often is no training data.  Here is an example of using it.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mlipops</span><span class="w"> </span><span class="kn">import</span> <span class="n">NeighborList</span><span class="p">,</span> <span class="n">ZBL</span><span class="p">,</span> <span class="n">get_covalent_radii</span>
+<span class="n">radii</span> <span class="o">=</span> <span class="n">get_covalent_radii</span><span class="p">(</span><span class="n">numbers</span><span class="p">,</span> <span class="mf">0.052917721</span><span class="p">)</span>
+<span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">NeighborList</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">radii</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
+<span class="n">zbl</span> <span class="o">=</span> <span class="n">ZBL</span><span class="p">(</span><span class="n">neighbor_list</span><span class="p">,</span> <span class="mf">138.935</span><span class="p">,</span> <span class="mf">0.052917721</span><span class="p">)</span>
+<span class="n">energy</span> <span class="o">=</span> <span class="n">zbl</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">numbers</span><span class="p">,</span> <span class="n">radii</span><span class="p">,</span> <span class="n">box_vectors</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Similar to <code class="docutils literal notranslate"><span class="pre">DFTD3</span></code>, we pass atomic numbers and covalent radii when evaluating the potential.  In this case the reasons
+are slightly different.  As originally published, the ZBL potential depends only on atomic numbers.  However, it was
+parameterized based on scattering data and does not give an accurate description of atoms that are covalently bonded to
+each other.  For that reason, it often is restricted to very short distances.  If you provide covalent radii, the
+potential is multiplied by a cutoff function that smoothly reduces it to zero when the distance between two atoms equals
+the sum of their covalent radii.  This usually is a very short distance, just a few angstroms.  When creating the
+<code class="docutils literal notranslate"><span class="pre">NeighborList</span></code>, we set the cutoff distance to twice the maximum covalent radius.  Any atoms further apart than that are
+guaranteed not to interact and can safely be omitted.</p>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">MLIPOps</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="api.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">API Documentation</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#introduction">Introduction</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#low-level-operations">Low Level Operations</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neighbor-lists">Neighbor Lists</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pairwise-interactions">Pairwise Interactions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#periodic-boundary-conditions">Periodic Boundary Conditions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#batch-processing">Batch Processing</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#high-level-operations">High Level Operations</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#units">Units</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#coulomb-interactions">Coulomb Interactions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dispersion">Dispersion</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nuclear-repulsion">Nuclear Repulsion</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="_sources/userguide.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026 Stanford University and the Authors.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.20.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
