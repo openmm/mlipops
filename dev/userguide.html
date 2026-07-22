@@ -372,6 +372,18 @@ physics based.  Examples include neighbor lists, pairwise interactions, and peri
 using the low level operations, which provide common infrastructure for the library.</p></li>
 </ul>
 </section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
+<p>You can install MLIPOps from PyPI with the command</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">mlipops</span>
+</pre></div>
+</div>
+<p>Alternatively, if you want to install from source, check out the code from https://github.com/openmm/mlipops, <code class="docutils literal notranslate"><span class="pre">cd</span></code> to
+the root directory, and type</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">.</span>
+</pre></div>
+</div>
+</section>
 <section id="low-level-operations">
 <h2>Low Level Operations<a class="headerlink" href="#low-level-operations" title="Link to this heading">#</a></h2>
 <section id="neighbor-lists">
@@ -389,7 +401,7 @@ An appropriate algorithm is chosen automatically based on the number of particle
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">NeighborList</span></code> provides automatic caching of results.  If you pass the same tensor of positions to it twice in a row, it
-it will immediately return the cached neighbors without needing to recompute them.  In addition, you can optionally
+will immediately return the cached neighbors without needing to recompute them.  In addition, you can optionally
 specify a padding distance.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">neighbor_list</span> <span class="o">=</span> <span class="n">NeighborList</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
 </pre></div>
@@ -412,7 +424,7 @@ depend on the distance and displacement vector between each pair of particles, a
 define.</p>
 <p>To use it, first define a Python function to compute the interaction.  For example, the following function computes the
 Coulomb energy <span class="math notranslate nohighlight">\(q_1 q_2/r\)</span>.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">coulomb</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">delta</span><span class="p">,</span> <span class="n">charges</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">coulomb</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">deltas</span><span class="p">,</span> <span class="n">charges</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">charges</span><span class="p">[</span><span class="n">pairs</span><span class="p">[:,</span><span class="mi">0</span><span class="p">]]</span><span class="o">*</span><span class="n">charges</span><span class="p">[</span><span class="n">pairs</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]]</span><span class="o">/</span><span class="n">r</span>
 </pre></div>
 </div>
@@ -688,6 +700,7 @@ guaranteed not to interact and can safely be omitted.</p>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#introduction">Introduction</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#low-level-operations">Low Level Operations</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neighbor-lists">Neighbor Lists</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pairwise-interactions">Pairwise Interactions</a></li>

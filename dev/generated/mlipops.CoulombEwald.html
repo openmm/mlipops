@@ -421,8 +421,8 @@ distance, the device to run on, and whether padding is used to enable caching of
 <li><p><strong>exclusions</strong> (<em>torch.Tensor</em>) – a tensor of shape (n_exclusions, 2).  Each row contains the indices of two particles whose interaction
 should be omitted.</p></li>
 <li><p><strong>kmaxx</strong> (<em>int</em>) – the index of the maximum wave vector in the x direction.  All vectors between -kmaxx and kmaxx are included.</p></li>
-<li><p><strong>kmaxy</strong> (<em>int</em>) – the index of the maximum wave vector in the x direction.  All vectors between -kmaxy and kmaxy are included.</p></li>
-<li><p><strong>kmaxz</strong> (<em>int</em>) – the index of the maximum wave vector in the x direction.  All vectors between -kmaxz and kmaxz are included.</p></li>
+<li><p><strong>kmaxy</strong> (<em>int</em>) – the index of the maximum wave vector in the y direction.  All vectors between -kmaxy and kmaxy are included.</p></li>
+<li><p><strong>kmaxz</strong> (<em>int</em>) – the index of the maximum wave vector in the z direction.  All vectors between -kmaxz and kmaxz are included.</p></li>
 <li><p><strong>alpha</strong> (<em>float</em>) – the coefficient of the erf() function used to separate the energy into direct and reciprocal space terms</p></li>
 <li><p><strong>prefactor</strong> (<em>float</em>) – Coulomb’s constant 1/(4*pi*eps0).  This sets the unit system.</p></li>
 <li><p><strong>cutoff</strong> (<em>float</em><em> | </em><em>None</em>) – the cutoff distance used when computing direct space interactions.  If None, the NeighborList’s cutoff
