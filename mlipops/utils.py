@@ -21,7 +21,8 @@ def periodic_displacements(displacements: torch.Tensor, box_vectors: torch.Tenso
 
     Returns
     -------
-    a Tensor of the same shape as displacements.  The vectors have been modified to apply periodic boundary conditions.
+    torch.Tensor:
+        a Tensor of the same shape as displacements.  The vectors have been modified to apply periodic boundary conditions.
     """
     if box_vectors is not None:
         if displacements.ndim == 2:
@@ -57,7 +58,8 @@ def batch_periodic_displacements(displacements: torch.Tensor, batch: torch.Tenso
 
     Returns
     -------
-    a Tensor of the same shape as displacements.  The vectors have been modified to apply periodic boundary conditions.
+    torch.Tensor:
+        a Tensor of the same shape as displacements.  The vectors have been modified to apply periodic boundary conditions.
     """
     if box_vectors is not None:
         if has_triton and displacements.device.type == 'cuda':
@@ -91,7 +93,8 @@ def pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, box_vec
 
     Returns
     -------
-    a Tensor of shape (n_pairs, 3).  Each row contains the displacement between the corresponding pair of points.
+    torch.Tensor:
+        a Tensor of shape (n_pairs, 3).  Each row contains the displacement between the corresponding pair of points.
     """
     return periodic_displacements(positions[pairs[:,1]] - positions[pairs[:,0]], box_vectors)
 
@@ -116,7 +119,8 @@ def batch_pairwise_displacements(positions: torch.Tensor, pairs: torch.Tensor, b
 
     Returns
     -------
-    a Tensor of shape (n_pairs, 3).  Each row contains the displacement between the corresponding pair of points.
+    torch.Tensor:
+        a Tensor of shape (n_pairs, 3).  Each row contains the displacement between the corresponding pair of points.
     """
     displacements = positions[pairs[:,1]] - positions[pairs[:,0]]
     if box_vectors is not None:
@@ -128,7 +132,7 @@ def get_covalent_radii(atomic_numbers: torch.Tensor, bohr_radius: float) -> torc
     """Get the covalent radii for a set of atoms based on their atomic numbers.
 
     Covalent radii are not uniquely defined.  Various sets of values have been published.  The ones used here are chosen
-    to be consistent with the simple-dfdt3 library (https://github.com/dftd3/simple-dftd3).  They are taken from
+    to be consistent with the simple-dftd3 library (https://github.com/dftd3/simple-dftd3).  They are taken from
     Pyykko and Atsumi, Chem. Eur. J. 15, 2009, 188-197, except that the radii of metals have been reduced by 10%.
 
     Parameters
