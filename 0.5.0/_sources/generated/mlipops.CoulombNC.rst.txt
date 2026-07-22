@@ -1,0 +1,10 @@
+﻿mlipops.CoulombNC
+=================
+
+.. currentmodule:: mlipops
+
+.. autoclass:: CoulombNC
+
+   
+   .. automethod:: __init__
+   

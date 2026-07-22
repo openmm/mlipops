@@ -1,0 +1,10 @@
+﻿mlipops.DFTD3
+=============
+
+.. currentmodule:: mlipops
+
+.. autoclass:: DFTD3
+
+   
+   .. automethod:: __init__
+   
