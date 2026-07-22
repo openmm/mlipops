@@ -22,9 +22,14 @@ pip install .
 
 PyPI packages will be coming once the code matures a little more.
 
+## Documentation
+
+See the [User Guide](https://openmm.github.io/mlipops/dev/userguide.html) and [API documentation](https://openmm.github.io/mlipops/dev/api.html)
+for instructions on how to use MLIPOps.
+
 ## Features
 
-These are the currently implemented features.  Many more are planned.  Expect this list to grow quickly.
+These are the currently implemented features.  Expect this list to grow with time.
 
 - Neighbor list construction
 - Coulomb interactions

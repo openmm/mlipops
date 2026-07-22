@@ -67,8 +67,9 @@ class ZBL(torch.nn.Module):
 
         Returns
         -------
-        a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
-        total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
+        torch.Tensor:
+            a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
+            total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
         neighbors = self.neighbor_list(positions, box_vectors, batch)
         energy = self.pairwise(positions, (atomic_numbers, radii), neighbors, box_vectors, batch)

@@ -100,7 +100,8 @@ class NeighborList(torch.nn.Module):
 
         Returns
         -------
-        a Tensor of shape (pairs, 2).  Each row contains the indices of two particles that can interact.
+        torch.Tensor:
+            a Tensor of shape (pairs, 2).  Each row contains the indices of two particles that can interact.
         """
         if self._cutoff is None and batch is None:
             # Since we're returning all possible pairs, it mostly doesn't change from one call to the next.

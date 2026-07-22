@@ -81,8 +81,9 @@ class CoulombRF(torch.nn.Module):
 
         Returns
         -------
-        a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
-        total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
+        torch.Tensor:
+            a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
+            total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
         neighbors = self.neighbor_list(positions, box_vectors, batch)
         energy = self.pairwise(positions, charges, neighbors, box_vectors, batch)
@@ -106,7 +107,8 @@ class CoulombRF(torch.nn.Module):
 
         Returns
         -------
-        a Tensor of shape (n_points, 3) containing the electric field at each of the points
+        torch.Tensor:
+            a Tensor of shape (n_points, 3) containing the electric field at each of the points
         """
         delta = periodic_displacements(field_positions.view((-1,1,3))-positions, box_vectors)
         r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
