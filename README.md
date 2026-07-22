@@ -14,13 +14,18 @@ is written in Python using PyTorch and Triton to do calculations.  It is based a
 
 ## Installation
 
-To install, check out the code and type the following command from the root directory.
+To install from PyPI type
+
+```
+pip install mlipops
+```
+
+Alternatively, if you want to install from source, check out the code and type the following command from the root
+directory.
 
 ```
 pip install .
 ```
-
-PyPI packages will be coming once the code matures a little more.
 
 ## Documentation
 
