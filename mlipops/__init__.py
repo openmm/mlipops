@@ -1,3 +1,4 @@
+from .chargeequilibration import ChargeEquilibration
 from .coulombewald import CoulombEwald
 from .coulombnc import CoulombNC
 from .coulombpme import CoulombPME
