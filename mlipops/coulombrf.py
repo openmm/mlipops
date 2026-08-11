@@ -60,7 +60,7 @@ class CoulombRF(torch.nn.Module):
         self.cutoff = neighbor_list.cutoff if cutoff is None else cutoff
         self.pairwise = Pairwise(coulomb.ReactionFieldInteraction(self.cutoff, dielectric), self.cutoff, exclusions)
 
-    def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor,
+    def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor | None,
                 batch: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the interaction.
 
