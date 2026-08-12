@@ -53,9 +53,11 @@ class ChargeEquilibration(torch.nn.Module):
 
     def _compute_interactions_nc(self, positions: torch.Tensor, hardness: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
         distance = torch.linalg.vector_norm(positions.view((-1,1,3)) - positions, dim=2)
+        diagonal = torch.eye(positions.shape[0], dtype=torch.bool, device=positions.device)
+        distance = torch.where(diagonal, 1.0, distance) # Needed to avoid NaNs when computing gradients
         radius2 = radius**2
         gamma = torch.rsqrt(radius2.view((-1,1)) + radius2)
-        return torch.where(torch.eye(positions.shape[0], dtype=torch.bool, device=positions.device),
+        return torch.where(diagonal,
                            hardness + (math.sqrt(2/math.pi))/radius,
                            torch.erf(gamma*distance)/distance)
 

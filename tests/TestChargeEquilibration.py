@@ -115,3 +115,58 @@ def test_qeq_molecules(device):
     charges = eq(positions, electronegativity, hardness, radius, molecules=molecules)
     assert torch.allclose(charges[molecules[0][0]].sum(), torch.tensor(0.0), atol=1e-4)
     assert torch.allclose(charges[molecules[1][0]].sum(), torch.tensor(1.0), atol=1e-4)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('method, periodic', [('nc', False), ('rf', False), ('rf', True), ('ewald', True)])
+def test_qeq_derivatives(device, method, periodic):
+    """Test computing derivatives of QEq charges."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    positions, electronegativity, hardness, radius = get_nh3_tensors(device)
+    positions.requires_grad_(True)
+    electronegativity.requires_grad_(True)
+    hardness.requires_grad_(True)
+    radius.requires_grad_(True)
+    if method == 'nc':
+        coulomb = CoulombNC(None, 1.0, device=device)
+    elif method == 'rf':
+        neighbor_list = NeighborList(2.0, device=device)
+        coulomb = CoulombRF(neighbor_list, None, 1.0)
+    else:
+        neighbor_list = NeighborList(2.0, device=device)
+        coulomb = CoulombEwald(neighbor_list, None, 7, 5, 5, 2.0, 1.0)
+    eq = ChargeEquilibration(coulomb)
+    if periodic:
+        box_vectors = torch.tensor([[9.0, 0, 0], [0, 4.0, 0], [0, 0, 5.0]], dtype=torch.float32, device=device)
+    else:
+        box_vectors = None
+
+    # Compute the charges and their derivatives.
+
+    charges = eq(positions, electronegativity, hardness, radius, 0, box_vectors=box_vectors)
+    result = (charges*charges).sum()
+    pos_grad = torch.autograd.grad(result, positions, retain_graph=True)[0]
+    elec_grad = torch.autograd.grad(result, electronegativity, retain_graph=True)[0]
+    hardness_grad = torch.autograd.grad(result, hardness, retain_graph=True)[0]
+    radius_grad = torch.autograd.grad(result, radius)[0]
+
+    # Check them against a finite difference approximation.
+
+    delta = 0.02
+    norm = torch.linalg.norm(pos_grad)
+    c1 = eq(positions+0.5*delta*pos_grad/norm, electronegativity, hardness, radius, 0, box_vectors=box_vectors)
+    c2 = eq(positions-0.5*delta*pos_grad/norm, electronegativity, hardness, radius, 0, box_vectors=box_vectors)
+    assert torch.allclose((c1*c1).sum() - (c2*c2).sum(), norm*delta, rtol=1e-2)
+    norm = torch.linalg.norm(elec_grad)
+    c1 = eq(positions, electronegativity+0.5*delta*elec_grad/norm, hardness, radius, 0, box_vectors=box_vectors)
+    c2 = eq(positions, electronegativity-0.5*delta*elec_grad/norm, hardness, radius, 0, box_vectors=box_vectors)
+    assert torch.allclose((c1*c1).sum() - (c2*c2).sum(), norm*delta, rtol=1e-2)
+    norm = torch.linalg.norm(hardness_grad)
+    c1 = eq(positions, electronegativity, hardness+0.5*delta*hardness_grad/norm, radius, 0, box_vectors=box_vectors)
+    c2 = eq(positions, electronegativity, hardness-0.5*delta*hardness_grad/norm, radius, 0, box_vectors=box_vectors)
+    assert torch.allclose((c1*c1).sum() - (c2*c2).sum(), norm*delta, rtol=1e-2)
+    norm = torch.linalg.norm(radius_grad)
+    c1 = eq(positions, electronegativity, hardness, radius+0.5*delta*radius_grad/norm, 0, box_vectors=box_vectors)
+    c2 = eq(positions, electronegativity, hardness, radius-0.5*delta*radius_grad/norm, 0, box_vectors=box_vectors)
+    assert torch.allclose((c1*c1).sum() - (c2*c2).sum(), norm*delta, rtol=1e-2)
