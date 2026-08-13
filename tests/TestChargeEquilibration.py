@@ -1,4 +1,5 @@
 import torch
+import math
 import pickle
 import pytest
 from mlipops import ChargeEquilibration, CoulombNC, CoulombRF, CoulombEwald, NeighborList
@@ -21,6 +22,19 @@ def get_nh3_tensors(device):
     return positions, electronegativity, hardness, radius
 
 
+def validate_minimization(coulomb, positions, charges, box_vectors, hardness, electronegativity, radius):
+    e0 = coulomb(positions, charges, box_vectors) + (electronegativity*charges + 0.5*hardness*charges**2).sum()
+    for _ in range(10):
+        # Add a random offset to the charges and confirm that the energy increases.  This isn't strictly guaranteed,
+        # since the minimization is based on Gaussian charges instead of point charges, so include a small margin.
+
+        delta = 0.1*torch.randn_like(charges)
+        delta -= torch.mean(delta)
+        c2 = charges+delta
+        e2 = coulomb(positions, c2, box_vectors) + (electronegativity*c2 + 0.5*(hardness+(math.sqrt(2/torch.pi)/radius))*c2**2).sum()
+        assert e2 > e0-0.05
+
+
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_qeq_nc(device):
     """Test the QEq algorithm with no cutoff."""
@@ -33,6 +47,7 @@ def test_qeq_nc(device):
     # Compare to charges computed with tad-multicharge.
 
     charges = eq(positions, electronegativity, hardness, radius, 0)
+    validate_minimization(coulomb, positions, charges, None, hardness, electronegativity, radius)
     assert torch.allclose(torch.tensor([-0.8347, -0.8347,  0.2731,  0.2886,  0.2731,  0.2731,  0.2886,  0.2731]), charges.cpu(), atol=1e-4)
     charges = eq(positions, electronegativity, hardness, radius, 1)
     assert torch.allclose(torch.tensor([-0.6708, -0.6708,  0.3982,  0.3745,  0.3982,  0.3982,  0.3745,  0.3982]), charges.cpu(), atol=1e-4)
@@ -52,6 +67,7 @@ def test_qeq_rf(device):
     # Check that the charges are reasonable.
 
     charges = eq(positions, electronegativity, hardness, radius, 0)
+    validate_minimization(coulomb, positions, charges, None, hardness, electronegativity, radius)
     assert torch.allclose(charges.sum(), torch.tensor(0.0), atol=1e-4)
     assert torch.all(charges[:2] < 0.0)
     assert torch.all(charges[2:] > 0.0)
@@ -76,15 +92,16 @@ def test_qeq_ewald(device):
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     positions, electronegativity, hardness, radius = get_nh3_tensors(device)
-    cutoff = 2.0
+    cutoff = 3.0
     neighbor_list = NeighborList(cutoff, device=device)
-    coulomb = CoulombEwald(neighbor_list, None, 7, 5, 5, 2.0, 1.0)
+    coulomb = CoulombEwald(neighbor_list, None, 12, 12, 12, 2.0, 1.0)
     eq = ChargeEquilibration(coulomb)
-    box_vectors = torch.tensor([[9.0, 0, 0], [0, 4.0, 0], [0, 0, 5.0]], dtype=torch.float32, device=device)
+    box_vectors = torch.tensor([[9.0, 0, 0], [0, 8.0, 0], [0, 0, 8.0]], dtype=torch.float32, device=device)
 
     # Check that the charges are reasonable.
 
     charges = eq(positions, electronegativity, hardness, radius, 0, box_vectors=box_vectors)
+    validate_minimization(coulomb, positions, charges, box_vectors, hardness, electronegativity, radius)
     assert torch.allclose(charges.sum(), torch.tensor(0.0), atol=1e-4)
     assert torch.all(charges[:2] < 0.0)
     assert torch.all(charges[2:] > 0.0)
