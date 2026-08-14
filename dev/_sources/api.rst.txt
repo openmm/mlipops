@@ -6,6 +6,8 @@ API Documentation
     :nosignatures:
 
     
+      mlipops.ChargeEquilibration
+    
       mlipops.CoulombEwald
     
       mlipops.CoulombNC

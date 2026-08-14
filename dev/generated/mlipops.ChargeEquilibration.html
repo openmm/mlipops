@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlipops.NeighborList &#8212; MLIPOps  documentation</title>
+    <title>mlipops.ChargeEquilibration &#8212; MLIPOps  documentation</title>
   
   
   
@@ -41,12 +41,12 @@
     <script src="../_static/documentation_options.js?v=5929fcd5"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'generated/mlipops.NeighborList';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'generated/mlipops.ChargeEquilibration';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="mlipops.Pairwise" href="mlipops.Pairwise.html" />
-    <link rel="prev" title="mlipops.DFTD3" href="mlipops.DFTD3.html" />
+    <link rel="next" title="mlipops.CoulombEwald" href="mlipops.CoulombEwald.html" />
+    <link rel="prev" title="API Documentation" href="../api.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="dev" />
@@ -310,13 +310,13 @@
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
   <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="mlipops.ChargeEquilibration.html">mlipops.ChargeEquilibration</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">mlipops.ChargeEquilibration</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mlipops.CoulombEwald.html">mlipops.CoulombEwald</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mlipops.CoulombNC.html">mlipops.CoulombNC</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mlipops.CoulombPME.html">mlipops.CoulombPME</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mlipops.CoulombRF.html">mlipops.CoulombRF</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mlipops.DFTD3.html">mlipops.DFTD3</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">mlipops.NeighborList</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mlipops.NeighborList.html">mlipops.NeighborList</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mlipops.Pairwise.html">mlipops.Pairwise</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mlipops.ZBL.html">mlipops.ZBL</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mlipops.batch_pairwise_displacements.html">mlipops.batch_pairwise_displacements</a></li>
@@ -367,7 +367,7 @@
     
     <li class="breadcrumb-item"><a href="../api.html" class="nav-link">API Documentation</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">mlipops.NeighborList</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">mlipops.ChargeEquilibration</span></li>
   </ul>
 </nav>
 </div>
@@ -384,68 +384,57 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="mlipops-neighborlist">
-<h1>mlipops.NeighborList<a class="headerlink" href="#mlipops-neighborlist" title="Link to this heading">#</a></h1>
+  <section id="mlipops-chargeequilibration">
+<h1>mlipops.ChargeEquilibration<a class="headerlink" href="#mlipops-chargeequilibration" title="Link to this heading">#</a></h1>
 <dl class="py class">
-<dt class="sig sig-object py" id="mlipops.NeighborList">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">mlipops.</span></span><span class="sig-name descname"><span class="pre">NeighborList</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cutoff</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_self</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_symmetric</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'cpu'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlipops.NeighborList" title="Link to this definition">#</a></dt>
-<dd><p>Identifies neighboring particles that can interact with each other.</p>
-<p>Neighbors are usually defined by a distance cutoff: any pairs that are closer than the cutoff, possibly taking
-periodic boundary conditions into account, can interact and therefore are returned.  It is also possible to
-omit the cutoff, in which case all pairs are returned regardless of distance.</p>
-<p>Two additional options further restrict the result.  <cite>include_self</cite> determines whether a self interaction pair
-(i, i) should be included for each particle.  <cite>include_symmetric</cite> whether the result should include both of the
-symmetric pairs (i, j) and (j, i), or whether only one should be included.</p>
-<p>You can optionally specify a padding value, in which case all pairs that are within the distance cutoff+padding
-are returned.  This allows saving computation be reusing cached results.  If you call the neighbor list again
-and no particle has moved by more than half the padding distance, the previous result can be returned.  The
-disadvantage is that more pairs need to be included in the neighbor list.  This option is generally useful only
-when the cost of finding neighbors is large compared to the cost of computing interactions based on them.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>Because NeighborList caches its inputs and outputs, you must never modify them in place after calling the
-NeighborList.  For example, if you call it once with a Tensor of positions, modify the Tensor in place to
-contain different positions, and then pass it to the NeighborList again, it will incorrectly think the positions
-have not changed.</p>
-</div>
+<dt class="sig sig-object py" id="mlipops.ChargeEquilibration">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">mlipops.</span></span><span class="sig-name descname"><span class="pre">ChargeEquilibration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coulomb</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlipops.CoulombNC.html#mlipops.CoulombNC" title="mlipops.coulombnc.CoulombNC"><span class="pre">CoulombNC</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlipops.CoulombRF.html#mlipops.CoulombRF" title="mlipops.coulombrf.CoulombRF"><span class="pre">CoulombRF</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlipops.CoulombEwald.html#mlipops.CoulombEwald" title="mlipops.coulombewald.CoulombEwald"><span class="pre">CoulombEwald</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlipops.ChargeEquilibration" title="Link to this definition">#</a></dt>
+<dd><p>Compute atomic partial charges with charge equilibration.</p>
+<p>This class implements the charge equilibration method as described in <a class="reference external" href="http://dx.doi.org/10.1103/PhysRevB.92.045131">http://dx.doi.org/10.1103/PhysRevB.92.045131</a>.
+It models atoms as Gaussian charge distributions.  You provide three parameters for each atom: electronegativity,
+which describes its innate affinity for electrons; hardness, which describes its resistance to changes in charge;
+and radius, which is the width of the Gaussian charge distribution.  It solves for the charges that minimize an
+energy function subject to constraints on the total charge.</p>
+<p>In the simplest version, you provide a single number for the total charge of the system, and it constrains the
+atomic partial charges to add up to the correct value.  This works well for single isolated molecules, but cannot
+accurately describe systems of multiple molecules.  In particular, it unrealistically predicts fractional charges
+for molecules.  Instead you can provide a list of the atoms that make up each molecule and the total charge of each
+one.  It then solves the equations subject to a separate constraint for each molecule.  This produces more realistic
+results, but requires that you know in advance how the atoms are divided into molecules and how the charge is
+divided among them.</p>
 <dl class="py method">
-<dt class="sig sig-object py" id="mlipops.NeighborList.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cutoff</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_self</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_symmetric</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'cpu'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlipops.NeighborList.__init__" title="Link to this definition">#</a></dt>
-<dd><p>Create a NeighborList for identifying neighbors.</p>
+<dt class="sig sig-object py" id="mlipops.ChargeEquilibration.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coulomb</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlipops.CoulombNC.html#mlipops.CoulombNC" title="mlipops.coulombnc.CoulombNC"><span class="pre">CoulombNC</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlipops.CoulombRF.html#mlipops.CoulombRF" title="mlipops.coulombrf.CoulombRF"><span class="pre">CoulombRF</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlipops.CoulombEwald.html#mlipops.CoulombEwald" title="mlipops.coulombewald.CoulombEwald"><span class="pre">CoulombEwald</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlipops.ChargeEquilibration.__init__" title="Link to this definition">#</a></dt>
+<dd><p>Create an object for performing charge equilibration.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>cutoff</strong> (<em>float</em><em> | </em><em>None</em>) – the cutoff distance to use when identifying neighbors.  If None, all pairs are returned regardless
-of distance.</p></li>
-<li><p><strong>include_self</strong> (<em>bool</em>) – if True, include self interaction pairs of the form (i, i).</p></li>
-<li><p><strong>include_symmetric</strong> (<em>bool</em>) – if True, include both of the symmetric pairs (i, j) and (j, i) for particles i and j.  If False, only
-one of the two is included.</p></li>
-<li><p><strong>padding</strong> (<em>float</em><em> | </em><em>None</em>) – the padding distance to add to the cutoff, allowing cached results to be reused.  If None, caching
-is disabled.</p></li>
-<li><p><strong>device</strong> (<em>str</em>) – the PyTorch device to perform calculation on.</p></li>
-</ul>
+<dd class="field-odd"><p><strong>coulomb</strong> (<a class="reference internal" href="mlipops.CoulombNC.html#mlipops.CoulombNC" title="mlipops.CoulombNC"><em>CoulombNC</em></a><em> | </em><a class="reference internal" href="mlipops.CoulombRF.html#mlipops.CoulombRF" title="mlipops.CoulombRF"><em>CoulombRF</em></a><em> | </em><a class="reference internal" href="mlipops.CoulombEwald.html#mlipops.CoulombEwald" title="mlipops.CoulombEwald"><em>CoulombEwald</em></a>) – the object used to compute Coulomb interactions between atoms.  This determines what method is used for
+handling long range interactions and the neighbor list used for identifying interacting pairs.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="mlipops.NeighborList.forward">
-<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">positions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box_vectors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#mlipops.NeighborList.forward" title="Link to this definition">#</a></dt>
-<dd><p>Compute the neighbor list.</p>
+<dt class="sig sig-object py" id="mlipops.ChargeEquilibration.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">positions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">electronegativity</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hardness</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radius</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">total_charge</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">molecules</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box_vectors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#mlipops.ChargeEquilibration.forward" title="Link to this definition">#</a></dt>
+<dd><p>Perform charge equilibration to compute atomic partial charges.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>positions</strong> (<em>torch.Tensor</em>) – a Tensor of shape (particles, 3) containing the cartesian coordinates of each particle</p></li>
-<li><p><strong>box_vectors</strong> (<em>torch.Tensor</em><em> | </em><em>None</em>) – if batch is None, a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If batch is
-not None, a Tensor of shape (systems, 3, 3) containing the box vectors for each system.  If None, periodic
-boundary conditions are not used.</p></li>
-<li><p><strong>batch</strong> (<em>torch.Tensor</em><em> | </em><em>None</em>) – a Tensor of shape (particles,) containing the index of the system each particle belongs to.  This must be
-sorted in ascending order, and every system must contain at least one particle.  If None, the neighbor list
-is computed for a single system instead of a batch of systems.</p></li>
+<li><p><strong>positions</strong> (<em>torch.Tensor</em>) – a Tensor of shape (n_particles, 3) containing the Cartesian coordinates of each particle</p></li>
+<li><p><strong>electronegativity</strong> (<em>torch.Tensor</em>) – a Tensor of shape (n_particles,) containing the electronegativity ($chi$) of each particle</p></li>
+<li><p><strong>hardness</strong> (<em>torch.Tensor</em><em>,</em>) – a Tensor of shape (n_particles,) containing the hardness ($J_{ii}$) of each particle</p></li>
+<li><p><strong>radius</strong> (<em>torch.Tensor</em>) – a Tensor of shape (n_particles,) containing the radius ($lpha$) of each particle</p></li>
+<li><p><strong>total_charge</strong> (<em>float</em><em> | </em><em>None</em>) – the total charge of the system.  You must specify either total_charge or molecules, but not both.</p></li>
+<li><p><strong>molecules</strong> (<em>list</em><em> | </em><em>None</em>) – the list of molecules.  Each element should be a tuple with two elements.  The first element is a Tensor
+containing the indices of the particles that belong to the molecule.  The second element is a float with the
+total charge of the molecule.  You must specify either total_charge or molecules, but not both.</p></li>
+<li><p><strong>box_vectors</strong> (<em>torch.Tensor</em><em> | </em><em>None</em>) – a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
+conditions are not used.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>a Tensor of shape (pairs, 2).  Each row contains the indices of two particles that can interact.</p>
+<dd class="field-even"><p>a Tensor of shape (n_particles,) containing the charge of each particle</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>torch.Tensor</p>
@@ -468,20 +457,20 @@ is computed for a single system instead of a batch of systems.</p></li>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="mlipops.DFTD3.html"
+       href="../api.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">mlipops.DFTD3</p>
+        <p class="prev-next-title">API Documentation</p>
       </div>
     </a>
     <a class="right-next"
-       href="mlipops.Pairwise.html"
+       href="mlipops.CoulombEwald.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">mlipops.Pairwise</p>
+        <p class="prev-next-title">mlipops.CoulombEwald</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -504,9 +493,9 @@ is computed for a single system instead of a batch of systems.</p></li>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.NeighborList"><code class="docutils literal notranslate"><span class="pre">NeighborList</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.NeighborList.__init__"><code class="docutils literal notranslate"><span class="pre">NeighborList.__init__()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.NeighborList.forward"><code class="docutils literal notranslate"><span class="pre">NeighborList.forward()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.ChargeEquilibration"><code class="docutils literal notranslate"><span class="pre">ChargeEquilibration</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.ChargeEquilibration.__init__"><code class="docutils literal notranslate"><span class="pre">ChargeEquilibration.__init__()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.ChargeEquilibration.forward"><code class="docutils literal notranslate"><span class="pre">ChargeEquilibration.forward()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -515,7 +504,7 @@ is computed for a single system instead of a batch of systems.</p></li>
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/generated/mlipops.NeighborList.rst.txt">
+    <a href="../_sources/generated/mlipops.ChargeEquilibration.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

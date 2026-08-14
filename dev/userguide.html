@@ -605,6 +605,38 @@ this object will be used to compute energies of dipoles.</p>
 moment of each particle.  <code class="docutils literal notranslate"><span class="pre">batch</span></code> specifies which system each particle belongs to, as described above.  The returned
 value is a tensor whose length equals the number of systems, containing the energy of each system.</p>
 </section>
+<section id="charge-equilibration">
+<h3>Charge Equilibration<a class="headerlink" href="#charge-equilibration" title="Link to this heading">#</a></h3>
+<p>Charge equilibration is a method of determining partial charges for atoms.  It models each atom as a Gaussian charge
+distribution.  You specify three parameters for each atom: its electronegativity <span class="math notranslate nohighlight">\(\chi_i\)</span>, which describes its innate
+affinity for electrons; its hardness <span class="math notranslate nohighlight">\(J_{ii}\)</span>, which describes its resistance to changes in charge; and its radius
+<span class="math notranslate nohighlight">\(\alpha_i\)</span>, which is the width of the Gaussian charge distribution.  We then solve for the charges <span class="math notranslate nohighlight">\(q\)</span> that minimize the
+energy</p>
+<p><span class="math notranslate nohighlight">\(E = E_{coul}(r, q, \alpha) + \sum_{i} \left[ \chi_i q_i + \frac{1}{2} \left( J_{ii} + \frac{\sqrt{2}}{\sqrt{\pi} \alpha_i} \right) q_i^2 \right]\)</span></p>
+<p>subject to a constraint on the total charge, where <span class="math notranslate nohighlight">\(E_{coul}(r, q, \alpha)\)</span> is the energy of the Coulomb interaction.</p>
+<p>To use charge equilibration, first create an object to compute the Coulomb interaction.  This determines the method used
+to handle long range interactions (no cutoff, reaction field, or Ewald summation) and its parameters (e.g. the number of
+wave vectors for Ewald summation or the <code class="docutils literal notranslate"><span class="pre">NeighborList</span></code> used to identify interacting pairs).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mlipops</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoulombNC</span><span class="p">,</span> <span class="n">ChargeEquilibration</span>
+<span class="n">coulomb</span> <span class="o">=</span> <span class="n">CoulombNC</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="mf">138.935</span><span class="p">)</span>
+<span class="n">eq</span> <span class="o">=</span> <span class="n">ChargeEquilibration</span><span class="p">(</span><span class="n">coulomb</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You can then invoke it to compute the charges on atoms.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">charges</span> <span class="o">=</span> <span class="n">eq</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">electronegativity</span><span class="p">,</span> <span class="n">hardness</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="n">total_charge</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In this example we specified a single value for the total charge of the system.  That works for a single isolated
+molecule, but generally should not be used for systems of multiple molecules, since it leads to unphysical charge
+transfer and molecules with fractional charges.  Instead you can impose a separate constraint on the total charge of
+each molecule.  To do this, provide a list of the atoms making up each molecule and the total charge of each molecule.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">molecules</span> <span class="o">=</span> <span class="p">[(</span><span class="n">mol1_atoms</span><span class="p">,</span> <span class="n">mol1_charge</span><span class="p">),</span> <span class="p">(</span><span class="n">mol2_atoms</span><span class="p">,</span> <span class="n">mol2_charge</span><span class="p">)]</span>
+<span class="n">charges</span> <span class="o">=</span> <span class="n">eq</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">electronegativity</span><span class="p">,</span> <span class="n">hardness</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="n">molecules</span><span class="o">=</span><span class="n">molecules</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This produces more accurate results, but it requires you to know in advance how the atoms are grouped into molecules,
+and what the total charge of each molecule should be.</p>
+</section>
 <section id="dispersion">
 <h3>Dispersion<a class="headerlink" href="#dispersion" title="Link to this heading">#</a></h3>
 <p>Dispersion energy can be computed using the DFT-D3(BJ) model.  Using it is similar to the Coulomb examples shown above,
@@ -711,6 +743,7 @@ guaranteed not to interact and can safely be omitted.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#high-level-operations">High Level Operations</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#units">Units</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#coulomb-interactions">Coulomb Interactions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#charge-equilibration">Charge Equilibration</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dispersion">Dispersion</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nuclear-repulsion">Nuclear Repulsion</a></li>
 </ul>

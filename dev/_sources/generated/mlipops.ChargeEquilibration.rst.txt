@@ -1,0 +1,10 @@
+﻿mlipops.ChargeEquilibration
+===========================
+
+.. currentmodule:: mlipops
+
+.. autoclass:: ChargeEquilibration
+
+   
+   .. automethod:: __init__
+   
