@@ -25,5 +25,8 @@ classifiers = [
 [project.urls]
 Repository = "https://github.com/openmm/mlipops"
 
+[tool.setuptools.packages.find]
+include = ["mlipops*"]
+
 [tool.setuptools.package-data]
 mlipops = ["*.pt"]
