@@ -252,6 +252,47 @@ Invoking the object is exactly the same as before, but we include two extra argu
 moment of each particle.  `batch` specifies which system each particle belongs to, as described above.  The returned
 value is a tensor whose length equals the number of systems, containing the energy of each system.
 
+### Charge Equilibration
+
+Charge equilibration is a method of determining partial charges for atoms.  It models each atom as a Gaussian charge
+distribution.  You specify three parameters for each atom: its electronegativity $\chi_i$, which describes its innate
+affinity for electrons; its hardness $J_{ii}$, which describes its resistance to changes in charge; and its radius
+$\alpha_i$, which is the width of the Gaussian charge distribution.  We then solve for the charges $q$ that minimize the
+energy
+
+$E = E_{coul}(r, q, \alpha) + \sum_{i} \left[ \chi_i q_i + \frac{1}{2} \left( J_{ii} + \frac{\sqrt{2}}{\sqrt{\pi} \alpha_i} \right) q_i^2 \right]$
+
+subject to a constraint on the total charge, where $E_{coul}(r, q, \alpha)$ is the energy of the Coulomb interaction.
+
+To use charge equilibration, first create an object to compute the Coulomb interaction.  This determines the method used
+to handle long range interactions (no cutoff, reaction field, or Ewald summation) and its parameters (e.g. the number of
+wave vectors for Ewald summation or the `NeighborList` used to identify interacting pairs).
+
+```python
+from mlipops import CoulombNC, ChargeEquilibration
+coulomb = CoulombNC(None, 138.935)
+eq = ChargeEquilibration(coulomb)
+```
+
+You can then invoke it to compute the charges on atoms.
+
+```python
+charges = eq(positions, electronegativity, hardness, radius, total_charge=0)
+```
+
+In this example we specified a single value for the total charge of the system.  That works for a single isolated
+molecule, but generally should not be used for systems of multiple molecules, since it leads to unphysical charge
+transfer and molecules with fractional charges.  Instead you can impose a separate constraint on the total charge of
+each molecule.  To do this, provide a list of the atoms making up each molecule and the total charge of each molecule.
+
+```python
+molecules = [(mol1_atoms, mol1_charge), (mol2_atoms, mol2_charge)]
+charges = eq(positions, electronegativity, hardness, radius, molecules=molecules)
+```
+
+This produces more accurate results, but it requires you to know in advance how the atoms are grouped into molecules,
+and what the total charge of each molecule should be.
+
 ### Dispersion
 
 Dispersion energy can be computed using the DFT-D3(BJ) model.  Using it is similar to the Coulomb examples shown above,
