@@ -25,12 +25,12 @@ class CoulombNC(torch.nn.Module):
     value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  See the
     User Guide for the values in common unit systems.
     """
-    def __init__(self, exclusions: torch.Tensor, prefactor: float, max_multipole='charge', device: str = 'cpu'):
+    def __init__(self, exclusions: torch.Tensor | None, prefactor: float, max_multipole='charge', device: str = 'cpu'):
         """Create on object for computing Coulomb interactions.
 
         Parameters
         ----------
-        exclusions: torch.Tensor
+        exclusions: torch.Tensor | None
             a tensor of shape (n_exclusions, 2).  Each row contains the indices of two particles whose interaction
             should be omitted.
         prefactor: float

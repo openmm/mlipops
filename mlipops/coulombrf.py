@@ -23,7 +23,7 @@ class CoulombRF(torch.nn.Module):
     value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  See the
     User Guide for the values in common unit systems.
     """
-    def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor, prefactor: float,
+    def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor | None, prefactor: float,
                  dielectric: float = 78.3, cutoff: float | None = None):
         """Create on object for computing Coulomb interactions.
 
@@ -32,7 +32,7 @@ class CoulombRF(torch.nn.Module):
         neighbor_list: NeighborList
             the NeighborList used to identify interactions.  It determines the cutoff distance, the device to run on,
             and whether padding is used to enable caching of neighbors.
-        exclusions: torch.Tensor
+        exclusions: torch.Tensor | None
             a tensor of shape (n_exclusions, 2).  Each row contains the indices of two particles whose interaction
             should be omitted.
         prefactor: float

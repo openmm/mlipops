@@ -46,7 +46,7 @@ class CoulombPME(torch.nn.Module):
     value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  See the
     User Guide for the values in common unit systems.
     """
-    def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor, gridx: int, gridy: int, gridz: int,
+    def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor | None, gridx: int, gridy: int, gridz: int,
                  order: int, alpha: float, prefactor: float, cutoff: float | None = None, max_multipole='charge'):
         """Create on object for computing Coulomb interactions.
 
@@ -55,7 +55,7 @@ class CoulombPME(torch.nn.Module):
         neighbor_list: NeighborList
             the NeighborList used to identify direct space interactions.  It determines the direct space cutoff
             distance, the device to run on, and whether padding is used to enable caching of neighbors.
-        exclusions: torch.Tensor
+        exclusions: torch.Tensor | None
             a tensor of shape (n_exclusions, 2).  Each row contains the indices of two particles whose interaction
             should be omitted.
         gridx: int

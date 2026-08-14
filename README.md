@@ -42,6 +42,7 @@ These are the currently implemented features.  Expect this list to grow with tim
   - Reaction field: charges only, periodic and non-periodic systems
   - Ewald summation: charges and dipoles, periodic systems
   - Particle Mesh Ewald: charges and dipoles, periodic systems
+- Charge equilibration
 - Ziegler-Biersack-Littmark (ZBL) potential
 - DFT-D3(BJ) dispersion
 - Arbitrary pairwise potentials
