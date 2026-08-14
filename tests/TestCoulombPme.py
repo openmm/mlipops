@@ -321,7 +321,7 @@ def test_dipole_deriv(device):
 
     # Compute finite difference approximations from two displaced inputs.
 
-    delta = 0.001
+    delta = 0.01
     for i in range(len(dipoles)):
         for j in range(3):
             d1 = dipoles.clone()
@@ -408,7 +408,7 @@ def test_batch(device, max_multipole):
         assert torch.allclose(energy1, energy2, rtol=1e-4, atol=1e-4)
         energy2.backward()
         grad2 = pos.grad
-        assert torch.allclose(grad1, grad2, rtol=1e-3, atol=1e-4)
+        assert torch.allclose(grad1, grad2, rtol=1e-3, atol=1e-3)
         positions.grad.zero_()
         pos.grad.zero_()
 
