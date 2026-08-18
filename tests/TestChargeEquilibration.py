@@ -187,3 +187,17 @@ def test_qeq_derivatives(device, method, periodic):
     c1 = eq(positions, electronegativity, hardness, radius+0.5*delta*radius_grad/norm, 0, box_vectors=box_vectors)
     c2 = eq(positions, electronegativity, hardness, radius-0.5*delta*radius_grad/norm, 0, box_vectors=box_vectors)
     assert torch.allclose((c1*c1).sum() - (c2*c2).sum(), norm*delta, rtol=1e-2)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+def test_qeq_external_potential(device):
+    """Test the QEq algorithm with an external electric potential."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    positions, electronegativity, hardness, radius = get_nh3_tensors(device)
+    coulomb = CoulombNC(None, 1.0, device=device)
+    eq = ChargeEquilibration(coulomb)
+    field = torch.tensor([-1.0, 0.0, 0.0], dtype=torch.float32, device=device)
+    potential = -(positions*field).sum(axis=1)
+    charges = eq(positions, electronegativity, hardness, radius, 0, potential=potential)
+    assert torch.all(charges[[0,2,3,4]] > charges[[1,5,6,7]])
