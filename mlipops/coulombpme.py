@@ -39,8 +39,8 @@ class CoulombPME(torch.nn.Module):
     Attempting to compute a second derivative will throw an exception.  This means that if you use PME during training,
     the loss function can only depend on energy, not forces.  Consider using CoulombEwald during training instead.
 
-    In addition to calculating energy and forces, this class can compute the electric field at arbitrary points in
-    space.  To do this, call compute_field().
+    In addition to calculating energy and forces, this class can compute the electric field and potential at arbitrary
+    points in space.  To do this, call compute_field() or compute_potential().
 
     When you create an instance of this class, you must specify the value of Coulomb's constant 1/(4*pi*eps0).  Its
     value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  See the
@@ -218,6 +218,65 @@ class CoulombPME(torch.nn.Module):
                     energy -= (2/3)*sum_dipoles2*self.alpha**3/math.sqrt(torch.pi)
             energy += ReciprocalFunction.apply(self, positions, charges, dipoles, box_vectors, batch, num_systems)
         return self.prefactor*energy
+
+    def compute_potential(self, potential_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
+                          box_vectors: torch.Tensor, include_direct: bool = True, include_reciprocal: bool = True,
+                          dipoles: torch.Tensor | None = None) -> torch.Tensor:
+        """Compute the electric potential produced by the particles at a set of points.
+
+        Parameters
+        ----------
+        potential_positions: torch.Tensor
+            a Tensor of shape (n_points, 3) containing the positions at which to compute the potential
+        positions: torch.Tensor
+            a Tensor of shape (n_particles, 3) containing the Cartesian coordinates of each particle
+        charges:
+            a Tensor of shape (n_particles,) containing the charge of each particle
+        box_vectors: torch.Tensor
+            a Tensor of shape (3, 3) containing box vectors defining the periodic box.
+        include_direct: bool
+            specifies whether the direct space term should be included in the result
+        include_reciprocal: bool
+            specifies whether the reciprocal space term should be included in the result
+        dipoles: torch.Tensor | None
+            a Tensor of shape (n_particles, 3) containing the dipole moment of each particle.  If max_multipole is
+            'charge', this is ignored.
+
+        Returns
+        -------
+        torch.Tensor:
+            a Tensor of shape (n_points,) containing the electric potential at each of the points
+        """
+        if include_direct:
+            delta = periodic_displacements(potential_positions.view((-1,1,3))-positions, box_vectors)
+            r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
+            alphar = self.alpha*r
+            b0 = torch.erfc(alphar)/r
+            potential = charges.unsqueeze(1)*b0
+            if self.max_multipole != 'charge':
+                temp1 = 2*self.alpha/math.sqrt(math.pi)
+                expfactor = torch.exp(-alphar**2)
+                b1 = (b0 + temp1*expfactor)*r**-2
+                potential += (dipoles.unsqueeze(0)*delta).sum(axis=2, keepdim=True)*b1
+            potential = torch.where((r > 0)*(r < self.cutoff), potential, 0)
+            potential = potential.sum(dim=1).squeeze(1)
+        else:
+            potential = torch.zeros(potential_positions.shape[0], dtype=torch.float32, device=charges.device)
+        if include_reciprocal:
+            recip_box_vectors, _, _, _, _, _, recip_grid, eterm, transformed_dipoles = reciprocal_forward(self, positions, charges, dipoles, box_vectors, None, 1)
+            grid_size = (self.gridx, self.gridy, self.gridz)
+            grid_size_tensor = torch.tensor(grid_size, device=positions.device)
+            ti, _, data, ddata = compute_spline_coefficients(self, potential_positions, recip_box_vectors, grid_size_tensor, None)
+            grid = torch.fft.irfftn(recip_grid*eterm, grid_size, norm='forward')
+            num_points = potential_positions.shape[0]
+            charge_deriv = torch.zeros_like(potential)
+            if self.use_triton:
+                g = lambda meta: (triton.cdiv(num_points, meta['BLOCK_SIZE']),)
+                interp_derivatives_kernel[g](None, charge_deriv, grid, grid_size_tensor, data, ddata, ti, None, num_points, self.order, 256)
+            else:
+                interp_derivatives(None, charge_deriv, grid, grid_size_tensor, data, ddata, ti, None, self.order)
+            potential += charge_deriv
+        return self.prefactor*potential
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
                       box_vectors: torch.Tensor, include_direct: bool = True, include_reciprocal: bool = True,

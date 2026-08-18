@@ -293,6 +293,16 @@ charges = eq(positions, electronegativity, hardness, radius, molecules=molecules
 This produces more accurate results, but it requires you to know in advance how the atoms are grouped into molecules,
 and what the total charge of each molecule should be.
 
+You can specify an externally imposed electric field that should influence the charge distribution.  To do this, pass
+an extra argument containing the external potential at the location of each atom.  A common use for this feature is in
+ML/MM simulations, where charges in the MM region should polarize the ML region.  In this case, you can use
+`compute_potential()` to determine the potential induced by the MM charges.
+
+```python
+potential = coulomb.compute_potential(ml_positions, mm_positions, mm_charges)
+ml_charges = eq(ml_positions, electronegativity, hardness, radius, total_charge=0, potential=potential)
+```
+
 ### Dispersion
 
 Dispersion energy can be computed using the DFT-D3(BJ) model.  Using it is similar to the Coulomb examples shown above,

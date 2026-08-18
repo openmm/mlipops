@@ -38,7 +38,7 @@ class ChargeEquilibration(torch.nn.Module):
 
     def forward(self, positions: torch.Tensor, electronegativity: torch.Tensor, hardness: torch.Tensor,
                 radius: torch.Tensor, total_charge: float | None = None, molecules: list | None = None,
-                box_vectors: torch.Tensor | None = None) -> torch.Tensor:
+                box_vectors: torch.Tensor | None = None, potential: torch.Tensor | None = None) -> torch.Tensor:
         """Perform charge equilibration to compute atomic partial charges.
 
         Parameters
@@ -60,6 +60,8 @@ class ChargeEquilibration(torch.nn.Module):
         box_vectors: torch.Tensor | None
             a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
             conditions are not used.
+        potential: torch.Tensor
+            a Tensor of shape (n_particles,) containing the external electric potential at the location of each particle
 
         Returns
         -------
@@ -107,7 +109,10 @@ class ChargeEquilibration(torch.nn.Module):
 
         matrix = torch.cat([torch.cat([interaction, constraint], dim=1),
                             torch.cat([constraint.T, zeros], dim=1)])
-        x = torch.cat([-electronegativity, mol_charges])
+        rhs = electronegativity
+        if potential is not None:
+            rhs = rhs+potential
+        x = torch.cat([-rhs, mol_charges])
         return torch.linalg.solve(matrix, x)[:n]
 
 

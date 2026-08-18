@@ -18,12 +18,12 @@ def dipole_interaction(pairs, r, delta, params):
     c2 = charge[p2]
     d1 = dipole[p1]
     d2 = dipole[p2]
-    d1delta = (d1*delta).sum(axis=1)
-    d2delta = (d2*delta).sum(axis=1)
+    d1delta = (d1*delta).sum(dim=1)
+    d2delta = (d2*delta).sum(dim=1)
     denom3 = r**-3
     energy_cc = c1*c2/r
     energy_cd = (c2*d1delta - c1*d2delta)*denom3
-    energy_dd = ((d1*d2).sum(axis=1) - 3*d1delta*d2delta*r**-2)*denom3
+    energy_dd = ((d1*d2).sum(dim=1) - 3*d1delta*d2delta*r**-2)*denom3
     return energy_cc + energy_cd + energy_dd
 
 
@@ -77,8 +77,8 @@ class ErfcScaledDipoleInteraction(object):
         c2 = charge[p2]
         d1 = dipole[p1]
         d2 = dipole[p2]
-        d1delta = (d1*delta).sum(axis=1)
-        d2delta = (d2*delta).sum(axis=1)
+        d1delta = (d1*delta).sum(dim=1)
+        d2delta = (d2*delta).sum(dim=1)
         alphar = self.alpha*r
         rinv2 = r**-2
         expfactor = torch.exp(-alphar**2)
@@ -89,7 +89,7 @@ class ErfcScaledDipoleInteraction(object):
         b1 = rinv2*(b0 + self.temp1*expfactor)
         b2 = rinv2*(3*b1 + self.temp2*expfactor)
         g0 = c1*c2
-        g1 = c2*d1delta - c1*d2delta + (d1*d2).sum(axis=1)
+        g1 = c2*d1delta - c1*d2delta + (d1*d2).sum(dim=1)
         g2 = -d1delta*d2delta
         return (b0*g0 + b1*g1 + b2*g2)
 

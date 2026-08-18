@@ -416,7 +416,7 @@ def test_batch(device, max_multipole):
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('include_direct, include_reciprocal', [(True,False), (False,True), (True,True)])
 def test_compute_field(device, include_direct, include_reciprocal):
-    """Test computing the electric field."""
+    """Test computing the electric field and potential."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     positions = 3*torch.rand((30, 3), dtype=torch.float32, device=device)-1
@@ -444,6 +444,19 @@ def test_compute_field(device, include_direct, include_reciprocal):
         diffnorm = torch.linalg.vector_norm(f1-f2)/norm1
         assert torch.allclose(norm1, norm2, rtol=5e-3)
         assert diffnorm < 5e-3
+
+    # The field should equal the negative gradient of the potential.
+
+    delta = 0.001
+    for i in range(field_positions.shape[0]):
+        for j in range(3):
+            pos1 = field_positions.clone()
+            pos1[i,j] += delta
+            pot1 = pme.compute_potential(pos1, positions, charges, box_vectors, include_direct, include_reciprocal, dipoles)
+            pos1 = field_positions.clone()
+            pos1[i,j] -= delta
+            pot2 = pme.compute_potential(pos1, positions, charges, box_vectors, include_direct, include_reciprocal, dipoles)
+            assert torch.allclose(pot1[i]+2*delta*field[i,j], pot2[i], rtol=1e-2, atol=0.1)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])

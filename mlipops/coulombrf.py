@@ -16,8 +16,8 @@ class CoulombRF(torch.nn.Module):
     You can optionally specify that certain interactions should be omitted when computing the energy.  This is typically
     used for nearby atoms within the same molecule.
 
-    In addition to calculating energy and forces, this class can compute the electric field at arbitrary points in
-    space.  To do this, call compute_field().
+    In addition to calculating energy and forces, this class can compute the electric field and potential at arbitrary
+    points in space.  To do this, call compute_field() or compute_potential().
 
     When you create an instance of this class, you must specify the value of Coulomb's constant 1/(4*pi*eps0).  Its
     value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  See the
@@ -88,6 +88,36 @@ class CoulombRF(torch.nn.Module):
         neighbors = self.neighbor_list(positions, box_vectors, batch)
         energy = self.pairwise(positions, charges, neighbors, box_vectors, batch)
         return self.prefactor*energy
+
+    def compute_potential(self, potential_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
+                          box_vectors: torch.Tensor) -> torch.Tensor:
+        """Compute the electric potential produced by the particles at a set of points.
+
+        Parameters
+        ----------
+        potential_positions: torch.Tensor
+            a Tensor of shape (n_points, 3) containing the positions at which to compute the potential
+        positions: torch.Tensor
+            a Tensor of shape (n_particles, 3) containing the Cartesian coordinates of each particle
+        charges:
+            a Tensor of shape (n_particles,) containing the charge of each particle
+        box_vectors: torch.Tensor
+            a Tensor of shape (3, 3) containing box vectors defining the periodic box.  If None, periodic boundary
+            conditions are not used.
+
+        Returns
+        -------
+        torch.Tensor:
+            a Tensor of shape (n_points,) containing the electric potential at each of the points
+        """
+        delta = periodic_displacements(potential_positions.view((-1,1,3))-positions, box_vectors)
+        r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
+        k = self.pairwise.computation.k
+        c = self.pairwise.computation.c
+        potential = charges.unsqueeze(1)*(1/r + k*r**2 - c)
+        potential = torch.where((r > 0)*(r < self.cutoff), potential, 0)
+        potential = potential.sum(dim=1)
+        return self.prefactor*potential
 
     def compute_field(self, field_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
                       box_vectors: torch.Tensor) -> torch.Tensor:

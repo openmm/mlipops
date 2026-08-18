@@ -165,7 +165,7 @@ def test_batch(device, periodic):
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
 def test_compute_field(device):
-    """Test computing the electric field."""
+    """Test computing the electric field and potential."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     positions = 3*torch.rand((30, 3), dtype=torch.float32, device=device)-1
@@ -191,6 +191,14 @@ def test_compute_field(device):
         diffnorm = torch.linalg.vector_norm(f1-f2)/norm1
         assert torch.allclose(norm1, norm2, rtol=5e-3)
         assert diffnorm < 5e-3
+
+    # The field should equal the negative gradient of the potential.
+
+    field_positions.requires_grad_(True)
+    potential = rf.compute_potential(field_positions, positions, charges, box_vectors)
+    for i in range(field_positions.shape[0]):
+        potential_grad = torch.autograd.grad(potential[i], field_positions, retain_graph=True)[0]
+        assert torch.allclose(-potential_grad[i], field[i], rtol=1e-3)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
