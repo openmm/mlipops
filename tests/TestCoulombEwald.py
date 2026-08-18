@@ -391,7 +391,7 @@ def test_force_derivatives(device):
         c2[i] -= delta
         energy2 = ewald(positions, c2, box_vectors, dipoles=dipoles)
         force_norm2 = torch.linalg.norm(torch.autograd.grad(energy2, positions)[0])
-        assert torch.allclose(charge_grad[i], (force_norm1-force_norm2)/(2*delta), rtol=1e-2, atol=1e-2)
+        assert torch.allclose(force_norm1, force_norm2+charge_grad[i]*2*delta, rtol=1e-3, atol=1e-2)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])

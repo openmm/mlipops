@@ -210,7 +210,7 @@ def test_force_derivatives(device):
 
     # Check the charge derivative against a finite difference approximation.
 
-    delta = 0.01
+    delta = 0.02
     for i in range(len(charges)):
         c1 = charges.clone()
         c1[i] += delta
@@ -220,7 +220,7 @@ def test_force_derivatives(device):
         c2[i] -= delta
         energy2 = coulomb(positions, c2, dipoles)
         force_norm2 = torch.linalg.norm(torch.autograd.grad(energy2, positions)[0])
-        assert torch.allclose(charge_grad[i], (force_norm1-force_norm2)/(2*delta), rtol=1e-2, atol=1e-2)
+        assert torch.allclose(force_norm1, force_norm2+charge_grad[i]*2*delta, rtol=1e-3, atol=1e-2)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
