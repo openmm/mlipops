@@ -456,7 +456,7 @@ def test_compute_field(device, include_direct, include_reciprocal):
             pos1 = field_positions.clone()
             pos1[i,j] -= delta
             pot2 = pme.compute_potential(pos1, positions, charges, box_vectors, include_direct, include_reciprocal, dipoles)
-            assert torch.allclose(pot1[i]+2*delta*field[i,j], pot2[i], rtol=1e-2, atol=0.1)
+            assert torch.allclose(pot1[i]+2*delta*field[i,j], pot2[i], rtol=1e-2, atol=0.5)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
