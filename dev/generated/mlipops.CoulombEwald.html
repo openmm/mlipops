@@ -405,8 +405,8 @@ Each atom still interacts with all the periodic copies of the other.</p>
 interactions.  The direct space term therefore compensates for it, subtracting off the energy that was incorrectly
 included in reciprocal space.  The sum of the two terms thus yields the correct energy with the interaction fully
 excluded.</p>
-<p>In addition to calculating energy and forces, this class can compute the electric field at arbitrary points in
-space.  To do this, call compute_field().</p>
+<p>In addition to calculating energy and forces, this class can compute the electric field and potential at arbitrary
+points in space.  To do this, call compute_field() or compute_potential().</p>
 <p>When you create an instance of this class, you must specify the value of Coulomb’s constant 1/(4*pi*eps0).  Its
 value depends on the units used for energy and distance.  The value you specify thus sets the unit system.  See the
 User Guide for the values in common unit systems.</p>
@@ -460,6 +460,32 @@ is computed for a single system instead of a batch of systems.</p></li>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
 total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="mlipops.CoulombEwald.compute_potential">
+<span class="sig-name descname"><span class="pre">compute_potential</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">potential_positions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">positions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charges</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box_vectors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_direct</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_reciprocal</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dipoles</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#mlipops.CoulombEwald.compute_potential" title="Link to this definition">#</a></dt>
+<dd><p>Compute the electric potential produced by the particles at a set of points.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>potential_positions</strong> (<em>torch.Tensor</em>) – a Tensor of shape (n_points, 3) containing the positions at which to compute the potential</p></li>
+<li><p><strong>positions</strong> (<em>torch.Tensor</em>) – a Tensor of shape (n_particles, 3) containing the Cartesian coordinates of each particle</p></li>
+<li><p><strong>charges</strong> – a Tensor of shape (n_particles,) containing the charge of each particle</p></li>
+<li><p><strong>box_vectors</strong> (<em>torch.Tensor</em>) – a Tensor of shape (3, 3) containing box vectors defining the periodic box.</p></li>
+<li><p><strong>include_direct</strong> (<em>bool</em>) – specifies whether the direct space term should be included in the result</p></li>
+<li><p><strong>include_reciprocal</strong> (<em>bool</em>) – specifies whether the reciprocal space term should be included in the result</p></li>
+<li><p><strong>dipoles</strong> (<em>torch.Tensor</em><em> | </em><em>None</em>) – a Tensor of shape (n_particles, 3) containing the dipole moment of each particle.  If max_multipole is
+‘charge’, this is ignored.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>a Tensor of shape (n_points,) containing the electric potential at each of the points</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>torch.Tensor</p>
@@ -547,6 +573,7 @@ total energy.  Otherwise, it has shape (n_systems,) containing the energy of eac
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.CoulombEwald"><code class="docutils literal notranslate"><span class="pre">CoulombEwald</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.CoulombEwald.__init__"><code class="docutils literal notranslate"><span class="pre">CoulombEwald.__init__()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.CoulombEwald.forward"><code class="docutils literal notranslate"><span class="pre">CoulombEwald.forward()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.CoulombEwald.compute_potential"><code class="docutils literal notranslate"><span class="pre">CoulombEwald.compute_potential()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mlipops.CoulombEwald.compute_field"><code class="docutils literal notranslate"><span class="pre">CoulombEwald.compute_field()</span></code></a></li>
 </ul>
 </li>

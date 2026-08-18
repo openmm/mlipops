@@ -636,6 +636,14 @@ each molecule.  To do this, provide a list of the atoms making up each molecule 
 </div>
 <p>This produces more accurate results, but it requires you to know in advance how the atoms are grouped into molecules,
 and what the total charge of each molecule should be.</p>
+<p>You can specify an externally imposed electric field that should influence the charge distribution.  To do this, pass
+an extra argument containing the external potential at the location of each atom.  A common use for this feature is in
+ML/MM simulations, where charges in the MM region should polarize the ML region.  In this case, you can use
+<code class="docutils literal notranslate"><span class="pre">compute_potential()</span></code> to determine the potential induced by the MM charges.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">potential</span> <span class="o">=</span> <span class="n">coulomb</span><span class="o">.</span><span class="n">compute_potential</span><span class="p">(</span><span class="n">ml_positions</span><span class="p">,</span> <span class="n">mm_positions</span><span class="p">,</span> <span class="n">mm_charges</span><span class="p">)</span>
+<span class="n">ml_charges</span> <span class="o">=</span> <span class="n">eq</span><span class="p">(</span><span class="n">ml_positions</span><span class="p">,</span> <span class="n">electronegativity</span><span class="p">,</span> <span class="n">hardness</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="n">total_charge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">potential</span><span class="o">=</span><span class="n">potential</span><span class="p">)</span>
+</pre></div>
+</div>
 </section>
 <section id="dispersion">
 <h3>Dispersion<a class="headerlink" href="#dispersion" title="Link to this heading">#</a></h3>
