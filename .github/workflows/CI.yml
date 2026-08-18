@@ -13,11 +13,12 @@ jobs:
     runs-on:
       - self-hosted
       - cuda
-    name: CUDA (Python ${{ matrix.python-version }})
+    name: CUDA (Python ${{ matrix.python-version }}, PyTorch ${{ matrix.pytorch-version }})
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.14"]
+        pytorch-version: ["2.10", "2.13"]
 
     steps:
       - uses: actions/checkout@v7
@@ -29,7 +30,7 @@ jobs:
       - name: "Install MLIPOps"
         shell: bash -l {0}
         run: |
-          pip install -r devtools/ci/requirements.txt
+          pip install -r devtools/ci/requirements.txt 'torch==${{ matrix.pytorch-version }}.*'
           pip install .
 
       - name: "Test MLIPOps"
