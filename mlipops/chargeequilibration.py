@@ -3,6 +3,7 @@ import math
 from .coulombnc import CoulombNC
 from .coulombrf import CoulombRF
 from .coulombewald import CoulombEwald
+from .minres import minres
 from .utils import pairwise_displacements
 
 
@@ -22,6 +23,15 @@ class ChargeEquilibration(torch.nn.Module):
     one.  It then solves the equations subject to a separate constraint for each molecule.  This produces more realistic
     results, but requires that you know in advance how the atoms are divided into molecules and how the charge is
     divided among them.
+
+    You can optionally provide an external electric potential that should be used to polarize the atoms.  This might
+    be computed from a uniform external field, or by calling compute_potential() on a Coulomb calculation object to get
+    the potential resulting from a set of external charges.
+
+    This class offers a choice of method for solving the system of equations.  By default it uses torch.linalg.solve(),
+    which implements a direct algorithm.  It is accurate and generally robust, but it can be slow, especially for large
+    systems.  Alternatively you can choose MINRES, an efficient iterative algorithm.  It can be much faster in some
+    cases, but this comes at the cost of somewhat lower accuracy.
     """
 
     def __init__(self, coulomb: CoulombNC | CoulombRF | CoulombEwald):
@@ -38,7 +48,8 @@ class ChargeEquilibration(torch.nn.Module):
 
     def forward(self, positions: torch.Tensor, electronegativity: torch.Tensor, hardness: torch.Tensor,
                 radius: torch.Tensor, total_charge: float | None = None, molecules: list | None = None,
-                box_vectors: torch.Tensor | None = None, potential: torch.Tensor | None = None) -> torch.Tensor:
+                box_vectors: torch.Tensor | None = None, potential: torch.Tensor | None = None,
+                solver: str = 'direct') -> torch.Tensor:
         """Perform charge equilibration to compute atomic partial charges.
 
         Parameters
@@ -62,6 +73,10 @@ class ChargeEquilibration(torch.nn.Module):
             conditions are not used.
         potential: torch.Tensor
             a Tensor of shape (n_particles,) containing the external electric potential at the location of each particle
+        solver: str
+            the method to use for solving the system of equations.  Options are 'direct' (use torch.linalg.solve() to
+            directly compute the result) and 'minres' (an iterative solver that tends to be faster, especially for large
+            systems, at the cost of slightly lower accuracy).
 
         Returns
         -------
@@ -113,8 +128,11 @@ class ChargeEquilibration(torch.nn.Module):
         if potential is not None:
             rhs = rhs+potential
         x = torch.cat([-rhs, mol_charges])
-        return torch.linalg.solve(matrix, x)[:n]
-
+        if solver == 'direct':
+            return torch.linalg.solve(matrix, x)[:n]
+        if solver == 'minres':
+            return minres(matrix, x, tol=1e-7)[:n]
+        raise ValueError(f'Illegal value for solver: {solver}')
 
     def _compute_interactions_nc(self, positions: torch.Tensor, hardness: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
         """Build the interaction matrix when using CoulombNC."""
