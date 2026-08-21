@@ -36,7 +36,8 @@ def validate_minimization(coulomb, positions, charges, box_vectors, hardness, el
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
-def test_qeq_nc(device):
+@pytest.mark.parametrize('solver', ['direct', 'minres'])
+def test_qeq_nc(device, solver):
     """Test the QEq algorithm with no cutoff."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
@@ -46,10 +47,10 @@ def test_qeq_nc(device):
 
     # Compare to charges computed with tad-multicharge.
 
-    charges = eq(positions, electronegativity, hardness, radius, 0)
+    charges = eq(positions, electronegativity, hardness, radius, 0, solver=solver)
     validate_minimization(coulomb, positions, charges, None, hardness, electronegativity, radius)
     assert torch.allclose(torch.tensor([-0.8347, -0.8347,  0.2731,  0.2886,  0.2731,  0.2731,  0.2886,  0.2731]), charges.cpu(), atol=1e-4)
-    charges = eq(positions, electronegativity, hardness, radius, 1)
+    charges = eq(positions, electronegativity, hardness, radius, 1, solver=solver)
     assert torch.allclose(torch.tensor([-0.6708, -0.6708,  0.3982,  0.3745,  0.3982,  0.3982,  0.3745,  0.3982]), charges.cpu(), atol=1e-4)
 
 
@@ -201,3 +202,28 @@ def test_qeq_external_potential(device):
     potential = -(positions*field).sum(axis=1)
     charges = eq(positions, electronegativity, hardness, radius, 0, potential=potential)
     assert torch.all(charges[[0,2,3,4]] > charges[[1,5,6,7]])
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('solver', ['direct', 'minres'])
+def test_compile_and_pickle(device, solver):
+    """Test that ChargeEquilibration can be compiled and pickled."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    positions, electronegativity, hardness, radius = get_nh3_tensors(device)
+    coulomb = CoulombNC(None, 1.0, device=device)
+    eq = ChargeEquilibration(coulomb)
+
+    # Check that torch.compile works correctly.
+
+    compiled = torch.compile(eq)
+    charges1 = eq(positions, electronegativity, hardness, radius, 0, solver=solver)
+    charges2 = compiled(positions, electronegativity, hardness, radius, 0, solver=solver)
+    assert torch.allclose(charges1, charges2)
+
+    # Check that pickle works correctly.
+
+    pickled = pickle.dumps(eq)
+    eq2 = pickle.loads(pickled)
+    charges3 = eq2(positions, electronegativity, hardness, radius, 0, solver=solver)
+    assert torch.allclose(charges1, charges3)
