@@ -147,27 +147,25 @@ def minres(A, b, M=None, x0=None, tol=1e-5, maxiters=None):
         if ynorm.max() == 0 or Anorm == 0:
             test1 = torch.inf
         else:
-            test1 = rnorm / (Anorm * ynorm)
-
+            test1 = (rnorm / (Anorm * ynorm)).max()
+        if test1 <= tol:
+            break
         if Anorm == 0:
             test2 = torch.inf
         else:
-            test2 = root / Anorm
-        Acond = gmax / gmin
-        t1 = 1 + test1.max()
-        t2 = 1 + test2.max()
-        if t2 <= 1:
+            test2 = (root / Anorm).max()
+        if test2 <= tol:
             break
-        if t1 <= 1:
-            break
-
-        if Acond >= 0.1 / eps:
-            assert False, "System is ill-conditioned."
         if (epsx >= beta1).any():
             assert False
-        if test2.max() <= tol:
+        Acond = gmax / gmin
+        if Acond >= 0.1 / eps:
+            assert False, "System is ill-conditioned."
+        t1 = 1 + test1
+        if t1 <= 1:
             break
-        if test1.max() <= tol:
+        t2 = 1 + test2
+        if t2 <= 1:
             break
     return x
 
