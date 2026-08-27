@@ -205,6 +205,48 @@ def test_qeq_external_potential(device):
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('method, periodic', [('nc', False), ('rf', False), ('rf', True), ('ewald', True)])
+def test_qeq_batch(device, method, periodic):
+    """Test computing QEq charges for a batch of systems."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_systems = 10
+    positions, electronegativity, hardness, radius = get_nh3_tensors(device)
+    positions = positions.repeat(num_systems, 1)
+    positions += 0.3*torch.rand(positions.shape, dtype=torch.float32, device=device)
+    electronegativity = electronegativity.repeat(num_systems)
+    hardness = hardness.repeat(num_systems)
+    radius = radius.repeat(num_systems)
+    batch = torch.arange(num_systems, device=device).expand((8,-1)).T.flatten()
+    total_charge = torch.randint(-2, 2, (num_systems,), device=device)
+    if method == 'nc':
+        coulomb = CoulombNC(None, 1.0, device=device)
+    elif method == 'rf':
+        neighbor_list = NeighborList(2.0, device=device)
+        coulomb = CoulombRF(neighbor_list, None, 1.0)
+    else:
+        neighbor_list = NeighborList(2.0, device=device)
+        coulomb = CoulombEwald(neighbor_list, None, 7, 5, 5, 2.0, 1.0)
+    eq = ChargeEquilibration(coulomb)
+    if periodic:
+        box_vectors = []
+        for i in range(num_systems):
+            scale = 0.9+0.2*torch.rand(1, dtype=torch.float32, device=device)
+            box_vectors.append(torch.tensor([[9.0, 0.0, 0.0],
+                                             [0.3, 5.0, 0.0],
+                                             [0.5, 0.2, 6.0]], dtype=torch.float32, device=device)*scale)
+        box_vectors = torch.stack(box_vectors)
+    else:
+        box_vectors = None
+    charges = eq(positions, electronegativity, hardness, radius, total_charge, box_vectors=box_vectors, batch=batch)
+    for i in range(num_systems):
+        mask = batch == i
+        box = box_vectors[i] if periodic else None
+        sys_charges = eq(positions[mask], electronegativity[mask], hardness[mask], radius[mask], total_charge[i], box_vectors=box)
+        assert torch.allclose(charges[mask], sys_charges, rtol=1e-3, atol=1e-4)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('solver', ['direct', 'minres'])
 def test_compile_and_pickle(device, solver):
     """Test that ChargeEquilibration can be compiled and pickled."""
