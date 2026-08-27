@@ -143,10 +143,7 @@ class CoulombEwald(torch.nn.Module):
             a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
             total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        if batch is None:
-            num_systems = 1
-        else:
-            num_systems = batch.max()+1
+        num_systems = 1 if batch is None else batch[-1]+1
         energy = torch.zeros((num_systems,), dtype=torch.float32, device=positions.device)
         if include_direct:
             neighbors = self.neighbor_list(positions, box_vectors, batch)
