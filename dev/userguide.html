@@ -644,6 +644,14 @@ ML/MM simulations, where charges in the MM region should polarize the ML region.
 <span class="n">ml_charges</span> <span class="o">=</span> <span class="n">eq</span><span class="p">(</span><span class="n">ml_positions</span><span class="p">,</span> <span class="n">electronegativity</span><span class="p">,</span> <span class="n">hardness</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="n">total_charge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">potential</span><span class="o">=</span><span class="n">potential</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>Another option is to specify a default charge <span class="math notranslate nohighlight">\(q^0_i\)</span> for every atom.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">charges</span> <span class="o">=</span> <span class="n">eq</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">electronegativity</span><span class="p">,</span> <span class="n">hardness</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="n">total_charge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">default_charge</span><span class="o">=</span><span class="n">default_charge</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In that case, the energy function is modified to</p>
+<p><span class="math notranslate nohighlight">\(E = E_{coul}(r, q, \alpha) + \sum_{i} \left[ \chi_i (q_i - q^0_i) + \frac{1}{2} \left( J_{ii} + \frac{\sqrt{2}}{\sqrt{\pi} \alpha_i} \right) (q_i - q^0_i)^2 \right]\)</span></p>
+<p>In some cases, using nonzero default charges (for example, the formal oxidation state of each atom) can lead to more
+accurate results.</p>
 </section>
 <section id="dispersion">
 <h3>Dispersion<a class="headerlink" href="#dispersion" title="Link to this heading">#</a></h3>
