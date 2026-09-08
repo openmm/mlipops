@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mlipops"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = ["torch"]
 authors = [{name = "Peter Eastman"}]
 description = "PyTorch operations for use in creating machine learning interatomic potentials"
