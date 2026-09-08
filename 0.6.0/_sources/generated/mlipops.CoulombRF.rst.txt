@@ -1,0 +1,10 @@
+﻿mlipops.CoulombRF
+=================
+
+.. currentmodule:: mlipops
+
+.. autoclass:: CoulombRF
+
+   
+   .. automethod:: __init__
+   

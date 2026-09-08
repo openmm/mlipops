@@ -1,0 +1,6 @@
+﻿mlipops.get\_covalent\_radii
+============================
+
+.. currentmodule:: mlipops
+
+.. autofunction:: get_covalent_radii

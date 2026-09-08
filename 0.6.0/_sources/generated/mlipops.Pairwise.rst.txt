@@ -1,0 +1,10 @@
+﻿mlipops.Pairwise
+================
+
+.. currentmodule:: mlipops
+
+.. autoclass:: Pairwise
+
+   
+   .. automethod:: __init__
+   

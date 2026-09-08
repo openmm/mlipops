@@ -1,0 +1,6 @@
+﻿mlipops.periodic\_displacements
+===============================
+
+.. currentmodule:: mlipops
+
+.. autofunction:: periodic_displacements

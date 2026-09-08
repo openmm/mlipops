@@ -1,0 +1,10 @@
+﻿mlipops.NeighborList
+====================
+
+.. currentmodule:: mlipops
+
+.. autoclass:: NeighborList
+
+   
+   .. automethod:: __init__
+   

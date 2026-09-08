@@ -1,0 +1,10 @@
+﻿mlipops.CoulombPME
+==================
+
+.. currentmodule:: mlipops
+
+.. autoclass:: CoulombPME
+
+   
+   .. automethod:: __init__
+   

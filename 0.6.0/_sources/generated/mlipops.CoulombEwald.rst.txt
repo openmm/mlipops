@@ -1,0 +1,10 @@
+﻿mlipops.CoulombEwald
+====================
+
+.. currentmodule:: mlipops
+
+.. autoclass:: CoulombEwald
+
+   
+   .. automethod:: __init__
+   

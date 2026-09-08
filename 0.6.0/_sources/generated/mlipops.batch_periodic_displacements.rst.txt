@@ -1,0 +1,6 @@
+﻿mlipops.batch\_periodic\_displacements
+======================================
+
+.. currentmodule:: mlipops
+
+.. autofunction:: batch_periodic_displacements
