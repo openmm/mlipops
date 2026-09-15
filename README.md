@@ -29,7 +29,7 @@ pip install .
 
 ## Documentation
 
-See the [User Guide](https://openmm.github.io/mlipops/dev/userguide.html) and [API documentation](https://openmm.github.io/mlipops/dev/api.html)
+See the [User Guide](https://openmm.github.io/mlipops/latest/userguide.html) and [API documentation](https://openmm.github.io/mlipops/latest/api.html)
 for instructions on how to use MLIPOps.
 
 ## Features
