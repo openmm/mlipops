@@ -113,6 +113,130 @@ def test_batch_neighbors(device, periodic, include_self, include_symmetric):
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('periodic,include_self,include_symmetric', [(False,False,False),(True,False,False),(False,False,True),(True,True,False),(False,True,True)])
+def test_subset(device, periodic, include_self, include_symmetric):
+    """Test restricting a neighbor list to a subset of particles."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_particles = 200 if device == 'cpu' else 1100
+    subset = torch.arange(50, 100, device=device)
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    if periodic:
+        box_vectors = torch.tensor([[2.0, 0.0, 0.0],
+                                    [0.1, 1.6, 0.0],
+                                    [0.2, 0.1, 1.5]], dtype=torch.float32, device=device)
+    else:
+        box_vectors = None
+    cutoff = 0.2
+    neighbor_list = NeighborList(cutoff, include_self, include_symmetric, device=device)
+    assert neighbor_list.cutoff == cutoff
+    assert neighbor_list.include_self == include_self
+    assert neighbor_list.include_symmetric == include_symmetric
+    neighbors = neighbor_list(positions, box_vectors, subset=subset)
+    neighbors = neighbors.detach().cpu().numpy()
+
+    # Check that all the returned neighbors are correct.
+
+    for index in range(neighbors.shape[0]):
+        i = int(neighbors[index, 0])
+        j = int(neighbors[index, 1])
+        if not include_self:
+            assert i != j
+        distance = torch.linalg.norm(periodic_displacements((positions[i]-positions[j]).reshape((1,3)), box_vectors), dim=-1)
+        assert distance <= cutoff
+        assert 50 <= i < 100
+
+    # Check that the right number of neighbors was found.
+
+    found = set(tuple(pair) for pair in neighbors)
+    index = torch.cartesian_prod(subset, torch.arange(num_particles, device=device))
+    if not include_symmetric:
+        in_subset = torch.zeros(num_particles, dtype=bool, device=device)
+        in_subset[subset] = True
+        index = index[(index[:,0]<=index[:,1]) | (~in_subset[index[:,1]])]
+    if not include_self:
+        index = index[index[:,0] != index[:,1]]
+    pos = positions[index]
+    distance = torch.linalg.norm(periodic_displacements(pos[:,0]-pos[:,1], box_vectors), dim=-1)
+    mask = distance < cutoff
+    num_expected = torch.sum(mask)
+    assert num_expected == len(found)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('periodic,include_self,include_symmetric', [(False,False,False),(True,False,False),(False,False,True),(True,True,False),(False,True,True)])
+def test_batch_subset(device, periodic, include_self, include_symmetric):
+    """Test restricting a batched neighbor list to a subset of particles."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    torch.random.manual_seed(1)
+    mean_particles = 100 if device == 'cpu' else 1100
+    num_systems = 10
+    subset = []
+    positions = []
+    batch = []
+    if periodic:
+        box_vectors = []
+    else:
+        box_vectors = None
+    num_particles = [mean_particles+i-num_systems//2 for i in range(num_systems)]
+    start_index = 0
+    for i in range(num_systems):
+        subset.append(torch.arange(30, 60, device=device)+start_index)
+        start_index += num_particles[i]
+        positions.append(5.0*torch.rand((num_particles[i],3), dtype=torch.float32, device=device)-2.0)
+        batch.append(torch.full((num_particles[i],), i, dtype=torch.int32, device=device))
+        if periodic:
+            scale = 0.9+0.2*torch.rand(1, dtype=torch.float32, device=device)
+            box_vectors.append(torch.tensor([[2.0, 0.0, 0.0],
+                                             [0.1, 1.6, 0.0],
+                                             [0.2, 0.1, 1.5]], dtype=torch.float32, device=device)*scale)
+    subset = torch.cat(subset)
+    positions = torch.cat(positions)
+    batch = torch.cat(batch)
+    if periodic:
+        box_vectors = torch.stack(box_vectors)
+    cutoff = 0.2
+    neighbor_list = NeighborList(cutoff, include_self, include_symmetric, device=device)
+    neighbors = neighbor_list(positions, box_vectors, batch, subset=subset)
+    neighbors = neighbors.detach().cpu().numpy()
+
+    # Check that all the returned neighbors are correct.
+
+    for index in range(neighbors.shape[0]):
+        i = int(neighbors[index, 0])
+        j = int(neighbors[index, 1])
+        if not include_self:
+            assert i != j
+        box = None if box_vectors is None else box_vectors[batch[i]]
+        distance = torch.linalg.norm(periodic_displacements((positions[i]-positions[j]).reshape((1,3)), box), dim=-1)
+        assert distance <= cutoff
+        assert batch[i] == batch[j]
+
+    # Check that the right number of neighbors was found.
+
+    found = set(tuple(pair) for pair in neighbors)
+    start_index = 0
+    num_expected = 0
+    in_subset = torch.zeros(positions.shape[0], dtype=bool, device=device)
+    in_subset[subset] = True
+    for i in range(num_systems):
+        index = torch.cartesian_prod(torch.arange(30, 60, device=device)+start_index,
+                                     torch.arange(num_particles[i], device=device)+start_index)
+        if not include_symmetric:
+            index = index[(index[:,0]<=index[:,1]) | (~in_subset[index[:,1]])]
+        if not include_self:
+            index = index[index[:,0] != index[:,1]]
+        pos = positions[index]
+        box = None if box_vectors is None else box_vectors[i]
+        distance = torch.linalg.norm(periodic_displacements(pos[:,0]-pos[:,1], box), dim=-1)
+        mask = distance < cutoff
+        num_expected += torch.sum(mask)
+        start_index += num_particles[i]
+    assert num_expected == len(found)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
 @pytest.mark.parametrize('include_self', [True, False])
 @pytest.mark.parametrize('include_symmetric', [True, False])
 def test_no_cutoff(device, include_self, include_symmetric):
