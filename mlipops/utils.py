@@ -222,7 +222,7 @@ def batch_create_supercell(positions: torch.Tensor, box_vectors: torch.Tensor, c
     torch.Tensor:
         a Tensor of shape (n_new_points, 3) containing the offset that was applied to each point in the supercell,
         measured as an integer number of unit cell box vectors
-    batch: torch.Tensor
+    torch.Tensor:
         a Tensor of shape (n_new_points,) containing the index of the system each point in the supercell belongs to
     """
     split_locations = torch.nonzero(batch[1:] != batch[:-1]).flatten()+1
@@ -289,6 +289,56 @@ def compute_supercell_neighbors(neighbor_list: "NeighborList", positions: torch.
         pair_offset -= torch.round(pair_offset/copies)*copies
         offset_dir = pair_offset.sign()
         positive = (offset_dir[:,0]*copies[1] + offset_dir[:,1])*copies[2] + offset_dir[:,2] > 0
+        mask = (n0<n1) | ((n0==n1) & positive)
+        if neighbor_list.include_self:
+            mask |= p0 == p1
+        pairs = pairs[mask]
+    return pairs
+
+
+def batch_compute_supercell_neighbors(neighbor_list: "NeighborList", positions: torch.Tensor,
+                                      unitcell_box_vectors: torch.Tensor, supercell_box_vectors: torch.Tensor,
+                                      points: torch.Tensor, offsets: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+    """Compute a neighbor list for unit cells in a batch of supercells created by batch_create_supercell().
+
+    This function is similar to compute_supercell_neighbors(), but it operates on multiple systems at once.
+
+    Parameters
+    ----------
+    neighbor_list: NeighborList
+        the NeighborList that will be used to indentify pairs of points within the cutoff distance
+    positions: torch.Tensor
+        the Tensor of Cartesian coordinates that was returned by batch_create_supercell().  Its shape is (num_points, 3).
+    unitcell_box_vectors: torch.Tensor
+        the unit cell box vectors that were passed to batch_create_supercell().  Its shape is (n_systems, 3, 3).
+    supercell_box_vectors: torch.Tensor
+        the supercell box vectors returned by batch_create_supercell().  Its shape is (n_systems, 3, 3).
+    points: torch.Tensor
+        the Tensor of point indices returned by batch_create_supercell().  Its shape is (num_points,).
+    offsets: torch.Tensor
+        the Tensor of offsets returned by batch_create_supercell().  Its shape is (num_points, 3).
+    batch: torch.Tensor
+        a Tensor of shape (n_points,) containing the index of the system each point belongs to
+
+    Returns
+    -------
+    torch.Tensor:
+        a Tensor of shape (pairs, 2).  Each row contains the indices of two particles that can interact.
+    """
+    in_first_cell = torch.all(offsets == 0, dim=1)
+    subset = torch.arange(offsets.shape[0])[in_first_cell]
+    pairs = neighbor_list(positions, supercell_box_vectors, batch=batch, subset=subset)
+    if not neighbor_list.include_symmetric:
+        p0 = pairs[:,0]
+        p1 = pairs[:,1]
+        n0 = points[p0]
+        n1 = points[p1]
+        pair_batch = batch[p0]
+        copies = torch.round(supercell_box_vectors.diagonal(dim1=1, dim2=2)/unitcell_box_vectors.diagonal(dim1=1, dim2=2))[pair_batch]
+        pair_offset = offsets[p1]-offsets[p0]
+        pair_offset -= torch.round(pair_offset/copies)*copies
+        offset_dir = pair_offset.sign()
+        positive = (offset_dir[:,0]*copies[:,1] + offset_dir[:,1])*copies[:,2] + offset_dir[:,2] > 0
         mask = (n0<n1) | ((n0==n1) & positive)
         if neighbor_list.include_self:
             mask |= p0 == p1

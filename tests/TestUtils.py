@@ -1,6 +1,6 @@
 import torch
 import pytest
-from mlipops import NeighborList, create_supercell, batch_create_supercell, compute_supercell_neighbors, pairwise_displacements
+from mlipops import NeighborList, create_supercell, batch_create_supercell, compute_supercell_neighbors, batch_compute_supercell_neighbors
 from collections import defaultdict
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -109,3 +109,46 @@ def test_supercell_neighbors(device, include_self, include_symmetric):
     for i in range(num_particles):
         for j in range(i, num_particles):
             assert count2[(i, j)] == 24*count1[(i, j)]
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('include_self,include_symmetric', [(False,False),(False,True),(True,False),(True,True)])
+def test_batch_supercell_neighbors(device, include_self, include_symmetric):
+    """Test computing neighbors for a batch of supercells."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_particles = 12
+    positions = 1.1*torch.rand((num_particles, 3), dtype=torch.float32, device=device)
+    box_vectors = torch.tensor([
+                                [[3.9, 0.0, 0.0],
+                                 [0.0, 1.6, 0.0],
+                                 [0.0, 0.0, 1.1]],
+                                [[1.1, 0.0, 0.0],
+                                 [0.1, 1.6, 0.0],
+                                 [0.2, 0.1, 2.1]],
+                                [[1.5, 0.0, 0.0],
+                                 [0.0, 1.1, 0.0],
+                                 [0.0, 0.0, 0.9]]], dtype=torch.float32, device=device)
+    batch = torch.tensor([0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2], device=device)
+    copies = [12, 24, 60]
+    cutoff = 1.9
+    new_positions, new_box_vectors, points, offset, new_batch = batch_create_supercell(positions, box_vectors, cutoff, batch)
+    neighbor_list = NeighborList(cutoff, include_self, include_symmetric, device=device)
+    neighbors1 = batch_compute_supercell_neighbors(neighbor_list, new_positions, box_vectors, new_box_vectors, points, offset, new_batch)
+    neighbors2 = neighbor_list(new_positions, new_box_vectors, batch=new_batch)
+
+    # For a system with N unit cells in the supercell, the full supercell should have N equivalent copies of each pair.
+
+    count1 = defaultdict(int)
+    count2 = defaultdict(int)
+    for i in range(neighbors1.shape[0]):
+        p1 = int(points[neighbors1[i, 0]])
+        p2 = int(points[neighbors1[i, 1]])
+        count1[(min(p1, p2), max(p1, p2))] += 1
+    for i in range(neighbors2.shape[0]):
+        p1 = int(points[neighbors2[i, 0]])
+        p2 = int(points[neighbors2[i, 1]])
+        count2[(min(p1, p2), max(p1, p2))] += 1
+    for i in range(num_particles):
+        for j in range(i, num_particles):
+            assert count2[(i, j)] == copies[batch[i]]*count1[(i, j)]
