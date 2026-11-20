@@ -169,7 +169,6 @@ def test_batch_subset(device, periodic, include_self, include_symmetric):
     """Test restricting a batched neighbor list to a subset of particles."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
-    torch.random.manual_seed(1)
     mean_particles = 100 if device == 'cpu' else 1100
     num_systems = 10
     subset = []

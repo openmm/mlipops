@@ -230,9 +230,9 @@ class NeighborList(torch.nn.Module):
             j = subset.unsqueeze(1)
             if not self._include_symmetric:
                 if self._include_self:
-                    mask &= (i<=j) | ~in_subset[i]
+                    mask &= (j<=i) | ~in_subset[i]
                 else:
-                    mask &= (i<j) | ~in_subset[i]
+                    mask &= (j<i) | ~in_subset[i]
             elif not self._include_self:
                 mask &= (i != j)
 
