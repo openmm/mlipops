@@ -1,7 +1,7 @@
 import torch
 import pickle
 import pytest
-from mlipops import NeighborList, CoulombEwald, CoulombPME
+from mlipops import NeighborList, CoulombEwald, CoulombPME, create_supercell, batch_create_supercell
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -314,6 +314,70 @@ def test_batch(device, max_multipole):
         assert torch.allclose(grad1, grad2, rtol=1e-3, atol=1e-3)
         positions.grad.zero_()
         pos.grad.zero_()
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('max_multipole', ['charge', 'dipole'])
+def test_supercell(device, max_multipole):
+    """Test Coulomb for a system requiring a supercell."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_particles = 20
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    charges = 2.0*torch.rand(num_particles, dtype=torch.float32, device=device)-1.0
+    dipoles = 0.05*(torch.rand((num_particles, 3), dtype=torch.float32, device=device)-0.5)
+    box_vectors = torch.tensor([[2.0, 0.0, 0.0],
+                                [0.1, 1.6, 0.0],
+                                [0.2, 0.1, 1.1]], dtype=torch.float32, device=device)
+    field_position = torch.tensor([0.5, 0.5, 0.5], dtype=torch.float32, device=device)
+    cutoff = 1.7
+    neighbor_list = NeighborList(cutoff, device=device)
+    ewald = CoulombEwald(neighbor_list, None, 10, 10, 15, 5.0, 138.935, max_multipole=max_multipole, use_supercell=True)
+    energy = ewald(positions, charges, box_vectors, dipoles=dipoles, include_reciprocal=False)
+    potential = ewald.compute_potential(field_position, positions, charges, box_vectors, dipoles=dipoles, include_reciprocal=False)
+    field = ewald.compute_field(field_position, positions, charges, box_vectors, dipoles=dipoles, include_reciprocal=False)
+
+    # Compare to the energy, potential, and field for a full supercell.
+
+    sc_positions, sc_box_vectors, particle, offset = create_supercell(positions, box_vectors, cutoff)
+    sc_energy = ewald(sc_positions, charges[particle], sc_box_vectors, dipoles=dipoles[particle], include_reciprocal=False)
+    sc_potential = ewald.compute_potential(field_position, sc_positions, charges[particle], sc_box_vectors, dipoles=dipoles[particle], include_reciprocal=False)
+    sc_field = ewald.compute_field(field_position, sc_positions, charges[particle], sc_box_vectors, dipoles=dipoles[particle], include_reciprocal=False)
+    assert torch.allclose(24*energy, sc_energy, rtol=1e-4)
+    assert torch.allclose(potential, sc_potential)
+    assert torch.allclose(field, sc_field)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+@pytest.mark.parametrize('max_multipole', ['charge', 'dipole'])
+def test_batch_supercell(device, max_multipole):
+    """Test Coulomb for a batch of systems requiring supercells."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_systems = 10
+    num_particles = 20*num_systems
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    charges = 2.0*torch.rand(num_particles, dtype=torch.float32, device=device)-1.0
+    dipoles = 0.05*(torch.rand((num_particles, 3), dtype=torch.float32, device=device)-0.5)
+    batch = torch.arange(num_systems, device=device).expand((20,-1)).T.flatten()
+    box_vectors = []
+    for i in range(num_systems):
+        scale = 0.8+0.4*torch.rand(1, dtype=torch.float32, device=device)
+        box_vectors.append(torch.tensor([[2.0, 0.0, 0.0],
+                                         [0.1, 1.6, 0.0],
+                                         [0.2, 0.1, 1.1]], dtype=torch.float32, device=device)*scale)
+    box_vectors = torch.stack(box_vectors)
+    cutoff = 1.7
+    neighbor_list = NeighborList(cutoff, device=device)
+    ewald = CoulombEwald(neighbor_list, None, 10, 10, 15, 5.0, 138.935, max_multipole=max_multipole, use_supercell=True)
+    energy = ewald(positions, charges, box_vectors, batch=batch, dipoles=dipoles, include_reciprocal=False)
+
+    # Compare to the energy for a full supercell.
+
+    sc_positions, sc_box_vectors, particle, offset, sc_batch = batch_create_supercell(positions, box_vectors, cutoff, batch)
+    sc_energy = ewald(sc_positions, charges[particle], sc_box_vectors, batch=sc_batch, dipoles=dipoles[particle], include_reciprocal=False)
+    copies = (sc_box_vectors.diagonal(dim1=1, dim2=2)/box_vectors.diagonal(dim1=1, dim2=2)).prod(dim=1)
+    assert torch.allclose(copies*energy, sc_energy, rtol=1e-4)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])

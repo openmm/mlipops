@@ -2,7 +2,7 @@ import torch
 import os
 from .neighborlist import NeighborList
 from .pairwise import Pairwise
-from .utils import pairwise_displacements, batch_pairwise_displacements
+from .utils import pairwise_displacements, batch_pairwise_displacements, create_supercell, batch_create_supercell, compute_supercell_neighbors, batch_compute_supercell_neighbors
 try:
     import triton
     from .dftd3_triton import compute_c6_kernel, backprop_c6_kernel
@@ -34,7 +34,8 @@ class DFTD3(torch.nn.Module):
     When you create an instance of this class, you must specify the values of Coulomb's constant 1/(4*pi*eps0) and the
     Bohr radius.  The values you specify set the unit system.  See the User Guide for the values in common unit systems.
     """
-    def __init__(self, neighbor_list: NeighborList, s8: float, a1: float, a2: float, prefactor: float, bohr_radius: float):
+    def __init__(self, neighbor_list: NeighborList, s8: float, a1: float, a2: float, prefactor: float,
+                 bohr_radius: float, use_supercell: bool = False):
         """Create on object for computing the DFT-D3(BJ) dispersion potential.
 
         Parameters
@@ -52,6 +53,10 @@ class DFTD3(torch.nn.Module):
             Coulomb's constant 1/(4*pi*eps0)
         bohr_radius: float
             the Bohr radius
+        use_supercell: bool
+            if True, a supercell will be created by tiling copies of the periodic box and used to evaluate the
+            energy.  This allows it to work for very small systems where the box width is less than twice the cutoff
+            distance.
         """
         if neighbor_list.include_self or neighbor_list.include_symmetric:
             raise ValueError('The neighbor list for DFTD3 should not include self interactions or symmetric interactions')
@@ -72,6 +77,8 @@ class DFTD3(torch.nn.Module):
         self.c8_scale = torch.sqrt(0.5*(torch.sqrt(torch.arange(len(r4r2)))*r4r2).to(neighbor_list.device))
         self.num_ref = torch.sum(self.cn_ref >= 0, dim=1)
         self.use_triton = has_triton and torch.device(neighbor_list.device).type == 'cuda'
+        self.use_supercell = use_supercell
+        self.cutoff = neighbor_list.cutoff
         cutoff = None if neighbor_list.padding is None else neighbor_list.cutoff
         self.pairwise = Pairwise(DFTD3Calculator(s8, a1, a2, bohr_radius), cutoff, None)
 
@@ -86,7 +93,7 @@ class DFTD3(torch.nn.Module):
             a Tensor of shape (n_particles, 3) containing the Cartesian coordinates of each particle
         atomic_numbers: torch.Tensor
             a Tensor of shape (n_particles,) containing the atomic number of each particle
-        covalent_radii: torch.Tensor | None
+        covalent_radii: torch.Tensor
             a Tensor of shape (n_particles,) containing the covalent radius of each particle.  These should be
             obtained by calling get_covalent_radii().
         box_vectors: torch.Tensor | None
@@ -106,7 +113,21 @@ class DFTD3(torch.nn.Module):
             a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
             total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        pairs = self.neighbor_list(positions, box_vectors, batch)
+        use_supercell = self.use_supercell and box_vectors is not None
+        if use_supercell:
+            if batch is None:
+                positions, sc_box_vectors, particles, offsets = create_supercell(positions, box_vectors, self.cutoff)
+                pairs = compute_supercell_neighbors(self.neighbor_list, positions, box_vectors, sc_box_vectors,
+                                                    particles, offsets)
+            else:
+                positions, sc_box_vectors, particles, offsets, batch = batch_create_supercell(positions, box_vectors, self.cutoff, batch)
+                pairs = batch_compute_supercell_neighbors(self.neighbor_list, positions, box_vectors, sc_box_vectors,
+                                                          particles, offsets, batch)
+            box_vectors = sc_box_vectors
+            atomic_numbers = atomic_numbers[particles]
+            covalent_radii = covalent_radii[particles]
+        else:
+            pairs = self.neighbor_list(positions, box_vectors, batch)
         if batch is None:
             delta = pairwise_displacements(positions, pairs, box_vectors)
         else:
@@ -120,8 +141,13 @@ class DFTD3(torch.nn.Module):
         radius_sum = torch.sum(covalent_radii[pairs], dim=1)
         f = 1/(1+torch.exp(-16.0*((4/3)*radius_sum/r-1)))
         cn = torch.zeros((num_atoms,), dtype=torch.float32, device=positions.device)
-        cn.scatter_add_(0, pairs[:,0], f)
-        cn.scatter_add_(0, pairs[:,1], f)
+        if use_supercell:
+            cn.scatter_add_(0, particles[pairs[:,0]], f)
+            cn.scatter_add_(0, particles[pairs[:,1]], f)
+            cn = cn[particles]
+        else:
+            cn.scatter_add_(0, pairs[:,0], f)
+            cn.scatter_add_(0, pairs[:,1], f)
 
         # Compute the C6 coefficient by interpolating reference values.
 

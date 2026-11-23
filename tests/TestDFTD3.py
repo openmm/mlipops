@@ -1,7 +1,7 @@
 import torch
 import pickle
 import pytest
-from mlipops import NeighborList, DFTD3, get_covalent_radii
+from mlipops import NeighborList, DFTD3, get_covalent_radii, create_supercell, batch_create_supercell
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])
@@ -85,7 +85,7 @@ def test_batch(device, periodic):
 
 @pytest.mark.parametrize('device,disable_triton', [('cpu', False), ('cuda', False), ('cuda', True)])
 def test_force_derivatives(device, disable_triton):
-    """Test computing derivatives of the force with CoulombRF."""
+    """Test computing derivatives of the force with DFTD3."""
     if not torch.cuda.is_available() and device == 'cuda':
         pytest.skip('No GPU')
     positions = 3*torch.rand((9, 3), dtype=torch.float32, device=device, requires_grad=True)-1
@@ -121,6 +121,61 @@ def test_force_derivatives(device, disable_triton):
         energy2 = d3(positions, numbers, r2, box_vectors)
         force_norm2 = torch.linalg.norm(torch.autograd.grad(energy2, positions)[0])
         assert torch.allclose(radius_grad[i], (force_norm1-force_norm2)/(2*delta), rtol=1e-2, atol=5e-3)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+def test_supercell(device):
+    """Test DFTD3 for a system requiring a supercell."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_particles = 3
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    numbers = torch.randint(5, 10, (num_particles,), device=device)
+    radii = get_covalent_radii(numbers, 0.052917721)
+    box_vectors = torch.tensor([[0.6, 0.0, 0.0],
+                                [0.1, 1.0, 0.0],
+                                [0.2, 0.1, 1.4]], dtype=torch.float32, device=device)
+    cutoff = 0.8
+    neighbor_list = NeighborList(cutoff, device=device)
+    d3 = DFTD3(neighbor_list, 0.78981345, 0.49484001, 5.73083694, 138.935, 0.052917721, use_supercell=True)
+    energy = d3(positions, numbers, radii, box_vectors)
+
+    # Compare to the energy of a full supercell.
+
+    sc_positions, sc_box_vectors, particle, offset = create_supercell(positions, box_vectors, cutoff)
+    sc_energy = d3(sc_positions, numbers[particle], radii[particle], sc_box_vectors)
+    assert torch.allclose(12*energy, sc_energy, rtol=1e-4)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda'])
+def test_batch_supercell(device):
+    """Test DFTD3 for a batch of systems requiring supercells."""
+    if not torch.cuda.is_available() and device == 'cuda':
+        pytest.skip('No GPU')
+    num_systems = 10
+    num_particles = 3*num_systems
+    positions = 5.0*torch.rand((num_particles,3), dtype=torch.float32, device=device)-2.0
+    numbers = torch.randint(5, 10, (num_particles,), device=device)
+    radii = get_covalent_radii(numbers, 0.052917721)
+    batch = torch.arange(num_systems, device=device).expand((3,-1)).T.flatten()
+    box_vectors = []
+    for i in range(num_systems):
+        scale = 0.8+0.4*torch.rand(1, dtype=torch.float32, device=device)
+        box_vectors.append(torch.tensor([[0.6, 0.0, 0.0],
+                                         [0.1, 1.0, 0.0],
+                                         [0.2, 0.1, 1.4]], dtype=torch.float32, device=device)*scale)
+    box_vectors = torch.stack(box_vectors)
+    cutoff = 0.8
+    neighbor_list = NeighborList(cutoff, device=device)
+    d3 = DFTD3(neighbor_list, 0.78981345, 0.49484001, 5.73083694, 138.935, 0.052917721, use_supercell=True)
+    energy = d3(positions, numbers, radii, box_vectors, batch)
+
+    # Compare to the energy for a full supercell.
+
+    sc_positions, sc_box_vectors, particle, offset, sc_batch = batch_create_supercell(positions, box_vectors, cutoff, batch)
+    sc_energy = d3(sc_positions, numbers[particle], radii[particle], sc_box_vectors, sc_batch)
+    copies = (sc_box_vectors.diagonal(dim1=1, dim2=2)/box_vectors.diagonal(dim1=1, dim2=2)).prod(dim=1)
+    assert torch.allclose(copies*energy, sc_energy, rtol=1e-4)
 
 
 @pytest.mark.parametrize('device', ['cpu', 'cuda'])

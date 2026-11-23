@@ -2,7 +2,7 @@ import torch
 from . import coulomb
 from .neighborlist import NeighborList
 from .pairwise import Pairwise
-from .utils import periodic_displacements
+from .utils import periodic_displacements, create_supercell, batch_create_supercell, compute_supercell_neighbors, batch_compute_supercell_neighbors
 
 
 class CoulombRF(torch.nn.Module):
@@ -24,7 +24,7 @@ class CoulombRF(torch.nn.Module):
     User Guide for the values in common unit systems.
     """
     def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor | None, prefactor: float,
-                 dielectric: float = 78.3, cutoff: float | None = None):
+                 dielectric: float = 78.3, cutoff: float | None = None, use_supercell: bool = False):
         """Create on object for computing Coulomb interactions.
 
         Parameters
@@ -43,6 +43,10 @@ class CoulombRF(torch.nn.Module):
             the cutoff distance used when computing space interactions.  If None, the NeighborList's cutoff is used.
             This argument is useful when a single NeighborList is shared by multiple interactions that use different
             cutoffs.  The value may never be greater than the NeighborList's cutoff.
+        use_supercell: bool
+            if True, a supercell will be created by tiling copies of the periodic box and used to evaluate the
+            energy.  This allows it to work for very small systems where the box width is less than twice the cutoff
+            distance.
         """
         if neighbor_list.include_self or neighbor_list.include_symmetric:
             raise ValueError('The neighbor list for Coulomb should not include self interactions or symmetric interactions')
@@ -58,6 +62,7 @@ class CoulombRF(torch.nn.Module):
         self.prefactor = prefactor
         self.dielectric = dielectric
         self.cutoff = neighbor_list.cutoff if cutoff is None else cutoff
+        self.use_supercell = use_supercell
         self.pairwise = Pairwise(coulomb.ReactionFieldInteraction(self.cutoff, dielectric), self.cutoff, exclusions)
 
     def forward(self, positions: torch.Tensor, charges: torch.Tensor, box_vectors: torch.Tensor | None,
@@ -85,8 +90,20 @@ class CoulombRF(torch.nn.Module):
             a torch.Tensor containing the energy of the interaction.  If batch is None, this is a scalar containing the
             total energy.  Otherwise, it has shape (n_systems,) containing the energy of each system in the batch.
         """
-        neighbors = self.neighbor_list(positions, box_vectors, batch)
-        energy = self.pairwise(positions, charges, neighbors, box_vectors, batch)
+        if self.use_supercell and box_vectors is not None:
+            if batch is None:
+                sc_positions, sc_box_vectors, particles, offsets = create_supercell(positions, box_vectors, self.cutoff)
+                neighbors = compute_supercell_neighbors(self.neighbor_list, sc_positions, box_vectors, sc_box_vectors,
+                                                        particles, offsets)
+                sc_batch = None
+            else:
+                sc_positions, sc_box_vectors, particles, offsets, sc_batch = batch_create_supercell(positions, box_vectors, self.cutoff, batch)
+                neighbors = batch_compute_supercell_neighbors(self.neighbor_list, sc_positions, box_vectors, sc_box_vectors,
+                                                              particles, offsets, sc_batch)
+            energy = self.pairwise(sc_positions, charges[particles], neighbors, sc_box_vectors, sc_batch)
+        else:
+            neighbors = self.neighbor_list(positions, box_vectors, batch)
+            energy = self.pairwise(positions, charges, neighbors, box_vectors, batch)
         return self.prefactor*energy
 
     def compute_potential(self, potential_positions: torch.Tensor, positions: torch.Tensor, charges: torch.Tensor,
@@ -110,6 +127,9 @@ class CoulombRF(torch.nn.Module):
         torch.Tensor:
             a Tensor of shape (n_points,) containing the electric potential at each of the points
         """
+        if self.use_supercell and box_vectors is not None:
+            positions, box_vectors, particles, offsets = create_supercell(positions, box_vectors, self.cutoff)
+            charges = charges[particles]
         delta = periodic_displacements(potential_positions.view((-1,1,3))-positions, box_vectors)
         r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
         k = self.pairwise.computation.k
@@ -140,6 +160,9 @@ class CoulombRF(torch.nn.Module):
         torch.Tensor:
             a Tensor of shape (n_points, 3) containing the electric field at each of the points
         """
+        if self.use_supercell and box_vectors is not None:
+            positions, box_vectors, particles, offsets = create_supercell(positions, box_vectors, self.cutoff)
+            charges = charges[particles]
         delta = periodic_displacements(field_positions.view((-1,1,3))-positions, box_vectors)
         r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
         k = self.pairwise.computation.k
