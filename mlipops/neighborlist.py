@@ -150,11 +150,11 @@ class NeighborList(torch.nn.Module):
             cutoff += self._padding
         if batch is None:
             if self.use_triton and positions.shape[0] > 1000:
-                result = self._compute_large_single(positions, box_vectors, cutoff)
+                result = self._compute_large_single(positions, box_vectors, cutoff, subset)
                 if result is None:
                     # Try again with a larger output buffer.
 
-                    result = self._compute_large_single(positions, box_vectors, cutoff)
+                    result = self._compute_large_single(positions, box_vectors, cutoff, subset)
             else:
                 result = self._compute_small_single(positions, box_vectors, cutoff, subset)
         else:

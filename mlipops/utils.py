@@ -181,12 +181,13 @@ def create_supercell(positions: torch.Tensor, box_vectors: torch.Tensor, cutoff:
         measured as an integer number of unit cell box vectors
     """
     num_particles = positions.shape[0]
+    device = positions.device
     copies = (2*cutoff/box_vectors.diag()).ceil().to(torch.int32)
     total_copies = copies.prod()
     new_box_vectors = copies.unsqueeze(1)*box_vectors
-    particle = torch.arange(num_particles).tile((total_copies,))
-    cell = torch.arange(total_copies).repeat(num_particles, 1).T.flatten()
-    cell_offset = torch.cartesian_prod(torch.arange(copies[0]), torch.arange(copies[1]), torch.arange(copies[2])).to(positions.dtype)
+    particle = torch.arange(num_particles, device=device).tile((total_copies,))
+    cell = torch.arange(total_copies, device=device).repeat(num_particles, 1).T.flatten()
+    cell_offset = torch.cartesian_prod(torch.arange(copies[0], device=device), torch.arange(copies[1], device=device), torch.arange(copies[2], device=device)).to(positions.dtype)
     new_positions = positions.tile((total_copies, 1))+(cell_offset@box_vectors)[cell]
     return new_positions, new_box_vectors, particle, cell_offset[cell]
 
@@ -226,7 +227,7 @@ def batch_create_supercell(positions: torch.Tensor, box_vectors: torch.Tensor, c
         a Tensor of shape (n_new_points,) containing the index of the system each point in the supercell belongs to
     """
     split_locations = torch.nonzero(batch[1:] != batch[:-1]).flatten()+1
-    batch_positions = torch.tensor_split(positions, split_locations)
+    batch_positions = torch.tensor_split(positions, split_locations.cpu())
     new_positions = []
     new_box_vectors = []
     particle = []
@@ -277,7 +278,7 @@ def compute_supercell_neighbors(neighbor_list: "NeighborList", positions: torch.
         a Tensor of shape (pairs, 2).  Each row contains the indices of two particles that can interact.
     """
     in_first_cell = torch.all(offsets == 0, dim=1)
-    subset = torch.arange(offsets.shape[0])[in_first_cell]
+    subset = torch.arange(offsets.shape[0], device=offsets.device)[in_first_cell]
     pairs = neighbor_list(positions, supercell_box_vectors, subset=subset)
     if not neighbor_list.include_symmetric:
         p0 = pairs[:,0]
@@ -326,7 +327,7 @@ def batch_compute_supercell_neighbors(neighbor_list: "NeighborList", positions: 
         a Tensor of shape (pairs, 2).  Each row contains the indices of two particles that can interact.
     """
     in_first_cell = torch.all(offsets == 0, dim=1)
-    subset = torch.arange(offsets.shape[0])[in_first_cell]
+    subset = torch.arange(offsets.shape[0], device=positions.device)[in_first_cell]
     pairs = neighbor_list(positions, supercell_box_vectors, batch=batch, subset=subset)
     if not neighbor_list.include_symmetric:
         p0 = pairs[:,0]

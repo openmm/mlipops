@@ -27,7 +27,7 @@ def test_supercell(device):
         x = cell//(expected_copies[1]*expected_copies[2])
         y = (cell//expected_copies[2])%expected_copies[1]
         z = cell%expected_copies[2]
-        assert torch.all(offset[i] == torch.tensor([x, y, z]))
+        assert torch.all(offset[i] == torch.tensor([x, y, z], device=device))
         assert torch.allclose(new_positions[i], positions[i%num_particles]+x*box_vectors[0]+y*box_vectors[1]+z*box_vectors[2])
 
 
@@ -55,7 +55,7 @@ def test_batch_supercell(device):
     expected_copies = torch.tensor([[1, 3, 4], [4, 3, 2], [3, 4, 5]], device=device)
     expected_total_copies = [int(expected_copies[i].prod()) for i in range(3)]
     expected_total_particles = sum(num_particles[i]*expected_total_copies[i] for i in range(3))
-    expected_batch = torch.cat([i*torch.ones(num_particles[i]*expected_total_copies[i], dtype=torch.int32) for i in range(3)])
+    expected_batch = torch.cat([i*torch.ones(num_particles[i]*expected_total_copies[i], dtype=torch.int32, device=device) for i in range(3)])
     assert new_positions.shape[0] == expected_total_particles
     assert particle.shape[0] == expected_total_particles
     assert offset.shape[0] == expected_total_particles
@@ -71,7 +71,7 @@ def test_batch_supercell(device):
             x = cell//(expected_copies[s][1]*expected_copies[s][2])
             y = (cell//expected_copies[s][2])%expected_copies[s][1]
             z = cell%expected_copies[s][2]
-            assert torch.all(offset[supercell_start_index+i] == torch.tensor([x, y, z]))
+            assert torch.all(offset[supercell_start_index+i] == torch.tensor([x, y, z], device=device))
             assert torch.allclose(new_positions[supercell_start_index+i], positions[unitcell_start_index+i%num_particles[s]]+x*box_vectors[s][0]+y*box_vectors[s][1]+z*box_vectors[s][2])
         unitcell_start_index += num_particles[s]
         supercell_start_index += num_particles[s]*expected_total_copies[s]
