@@ -3,7 +3,8 @@ import triton.language as tl
 
 
 @triton.jit
-def find_sort_keys_kernel(key_ptr, positions_ptr: tl.const, grid_size_ptr: tl.const, bin_size, num_particles: tl.constexpr, BLOCK_SIZE: tl.constexpr):
+def find_sort_keys_kernel(key_ptr, positions_ptr: tl.const, grid_size_ptr: tl.const, in_subset_ptr: tl.const, bin_size,
+                          num_particles: tl.constexpr, BLOCK_SIZE: tl.constexpr):
     pid = tl.program_id(axis=0)
     block_start = pid*BLOCK_SIZE
     particle = block_start + tl.arange(0, BLOCK_SIZE)
@@ -16,6 +17,10 @@ def find_sort_keys_kernel(key_ptr, positions_ptr: tl.const, grid_size_ptr: tl.co
     gridx = tl.load(grid_size_ptr)
     gridy = tl.load(grid_size_ptr+1)
     key = x + y*gridx + z*gridx*gridy
+    if in_subset_ptr is not None:
+        in_subset = tl.load(in_subset_ptr+particle, mask=mask)
+        gridz = tl.load(grid_size_ptr+2)
+        key -= in_subset*gridx*gridy*gridz
     tl.store(key_ptr+particle, key, mask=mask)
 
 
@@ -71,8 +76,8 @@ def find_neighbors_kernel(output_ptr, output_counter_ptr, block_pairs_ptr: tl.co
 
 @triton.jit
 def small_batch_kernel(output_ptr, output_counter_ptr, start_index_ptr: tl.const, system_particles_ptr: tl.const,
-                       positions_ptr: tl.const, box_vectors_ptr: tl.const, cutoff2, include_self, include_symmetric,
-                       num_systems, max_output_pairs, programs_per_system, BLOCK_SIZE: tl.constexpr):
+                       positions_ptr: tl.const, box_vectors_ptr: tl.const, in_subset_ptr: tl.const, cutoff2, include_self,
+                       include_symmetric, num_systems, max_output_pairs, programs_per_system, BLOCK_SIZE: tl.constexpr):
     pid = tl.program_id(axis=0)
     system = pid//programs_per_system
     if system >= num_systems:
@@ -92,7 +97,13 @@ def small_batch_kernel(output_ptr, output_counter_ptr, start_index_ptr: tl.const
         if not include_self:
             include *= i != j
         if not include_symmetric:
-            include *= i <= j
+            if in_subset_ptr is None:
+                include *= i <= j
+            else:
+                in_subset = tl.load(in_subset_ptr+particle2)
+                include *= (i <= j) | ~in_subset
+        if in_subset_ptr is not None:
+            include *= tl.load(in_subset_ptr+particle1)
         if cutoff2 is not None:
             x1 = tl.load(positions_ptr+3*particle1)
             y1 = tl.load(positions_ptr+3*particle1+1)

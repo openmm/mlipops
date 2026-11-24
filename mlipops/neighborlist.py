@@ -253,8 +253,13 @@ class NeighborList(torch.nn.Module):
         bin_size = 0.2*cutoff
         grid_size = ((positions.max(dim=0)[0]-positions.min(dim=0)[0])/bin_size).ceil().to(torch.int32)+3
         keys = torch.empty((num_particles,), dtype=torch.int32, device=self.device)
+        if subset is None:
+            in_subset = None
+        else:
+            in_subset = torch.zeros(num_particles, dtype=torch.bool, device=self.device)
+            in_subset[subset] = True
         g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
-        find_sort_keys_kernel[g](keys, positions, grid_size, bin_size, num_particles, 256)
+        find_sort_keys_kernel[g](keys, positions, grid_size, in_subset, bin_size, num_particles, 256)
         order = keys.sort()[1]
         sorted_positions = positions[order]
 
@@ -319,13 +324,19 @@ class NeighborList(torch.nn.Module):
 
         if self.use_triton:
             cutoff2 = None if cutoff is None else cutoff**2
-            mean_particles = positions.shape[0]/num_systems
+            num_particles = positions.shape[0]
+            mean_particles = num_particles/num_systems
             block_size = 256
             programs_per_system = int(math.ceil(0.5*mean_particles*mean_particles/block_size))
             output = torch.empty((self._max_neighbors, 2), dtype=torch.int32, device=self.device)
             output_counter = torch.zeros((1,), dtype=torch.int32, device=self.device)
+            if subset is None:
+                in_subset = None
+            else:
+                in_subset = torch.zeros(num_particles, dtype=torch.bool, device=self.device)
+                in_subset[subset] = True
             g = lambda meta: (programs_per_system*num_systems,)
-            small_batch_kernel[g](output, output_counter, start_index, system_particles, positions, box_vectors,
+            small_batch_kernel[g](output, output_counter, start_index, system_particles, positions, box_vectors, in_subset,
                                   cutoff2, self._include_self, self._include_symmetric, num_systems, self._max_neighbors,
                                   programs_per_system, block_size)
             if output_counter > self._max_neighbors:
@@ -334,8 +345,7 @@ class NeighborList(torch.nn.Module):
 
                 self._max_neighbors = int(1.1*output_counter)
                 return None
-            output = output.narrow(0, 0, output_counter)
-            return self._filter_subset(output, subset, positions.shape[0])
+            return output.narrow(0, 0, output_counter)
 
         # Build a list of all possible pairs.
 
