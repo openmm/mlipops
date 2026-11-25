@@ -3,7 +3,7 @@ import math
 from . import coulomb
 from .neighborlist import NeighborList
 from .pairwise import Pairwise
-from .utils import periodic_displacements
+from .utils import periodic_displacements, create_supercell, batch_create_supercell, compute_supercell_neighbors, batch_compute_supercell_neighbors
 
 
 class CoulombEwald(torch.nn.Module):
@@ -36,7 +36,8 @@ class CoulombEwald(torch.nn.Module):
     User Guide for the values in common unit systems.
     """
     def __init__(self, neighbor_list: NeighborList, exclusions: torch.Tensor | None, kmaxx: int, kmaxy: int, kmaxz: int,
-                 alpha: float, prefactor: float, cutoff: float | None = None, max_multipole='charge'):
+                 alpha: float, prefactor: float, cutoff: float | None = None, max_multipole='charge',
+                 use_supercell: bool = False):
         """Create on object for computing Coulomb interactions.
 
         Parameters
@@ -64,6 +65,10 @@ class CoulombEwald(torch.nn.Module):
         max_multipole: str
             the maximum multipole order for each particle.  Allowed options are `'charge'` (point charges only) and
             `'dipole'` (charges and dipoles).
+        use_supercell: bool
+            if True, a supercell will be created by tiling copies of the periodic box and used to evaluate the
+            energy.  This allows it to work for very small systems where the box width is less than twice the cutoff
+            distance.
         """
         if neighbor_list.include_self or neighbor_list.include_symmetric:
             raise ValueError('The neighbor list for Coulomb should not include self interactions or symmetric interactions')
@@ -91,6 +96,7 @@ class CoulombEwald(torch.nn.Module):
         self.prefactor = prefactor
         self.cutoff = neighbor_list.cutoff if cutoff is None else cutoff
         self.max_multipole = max_multipole
+        self.use_supercell = use_supercell
         if max_multipole == 'charge':
             self.direct = Pairwise(coulomb.ErfcScaledInteraction(coulomb.point_charge_interaction, alpha), self.cutoff, exclusions)
             self.exclusion_correction = Pairwise(coulomb.ErfScaledInteraction(coulomb.point_charge_interaction, alpha), None)
@@ -146,12 +152,28 @@ class CoulombEwald(torch.nn.Module):
         num_systems = 1 if batch is None else batch[-1]+1
         energy = torch.zeros((num_systems,), dtype=torch.float32, device=positions.device)
         if include_direct:
-            neighbors = self.neighbor_list(positions, box_vectors, batch)
-            if self.max_multipole == 'charge':
-                params = charges
+            if self.use_supercell:
+                if batch is None:
+                    sc_positions, sc_box_vectors, particles, offsets = create_supercell(positions, box_vectors, self.cutoff)
+                    neighbors = compute_supercell_neighbors(self.neighbor_list, sc_positions, box_vectors, sc_box_vectors,
+                                                            particles, offsets)
+                    sc_batch = None
+                else:
+                    sc_positions, sc_box_vectors, particles, offsets, sc_batch = batch_create_supercell(positions, box_vectors, self.cutoff, batch)
+                    neighbors = batch_compute_supercell_neighbors(self.neighbor_list, sc_positions, box_vectors, sc_box_vectors,
+                                                                  particles, offsets, sc_batch)
+                if self.max_multipole == 'charge':
+                    params = charges[particles]
+                else:
+                    params = (charges[particles], dipoles[particles])
+                energy += self.direct(sc_positions, params, neighbors, sc_box_vectors, sc_batch)
             else:
-                params = (charges, dipoles)
-            energy += self.direct(positions, params, neighbors, box_vectors, batch)
+                neighbors = self.neighbor_list(positions, box_vectors, batch)
+                if self.max_multipole == 'charge':
+                    params = charges
+                else:
+                    params = (charges, dipoles)
+                energy += self.direct(positions, params, neighbors, box_vectors, batch)
             if self.exclusions is not None:
                 energy -= self.exclusion_correction(positions, params, self.exclusions, None, batch)
         if include_reciprocal:
@@ -206,16 +228,26 @@ class CoulombEwald(torch.nn.Module):
             a Tensor of shape (n_points,) containing the electric potential at each of the points
         """
         if include_direct:
-            delta = periodic_displacements(potential_positions.view((-1,1,3))-positions, box_vectors)
+            if self.use_supercell:
+                positions2, box_vectors2, particles, offsets = create_supercell(positions, box_vectors, self.cutoff)
+                charges2 = charges[particles]
+                if self.max_multipole != 'charge':
+                    dipoles2 = dipoles[particles]
+            else:
+                positions2 = positions
+                box_vectors2 = box_vectors
+                charges2 = charges
+                dipoles2 = dipoles
+            delta = periodic_displacements(potential_positions.view((-1,1,3))-positions2, box_vectors2)
             r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
             alphar = self.alpha*r
             b0 = torch.erfc(alphar)/r
-            potential = charges.unsqueeze(1)*b0
+            potential = charges2.unsqueeze(1)*b0
             if self.max_multipole != 'charge':
                 temp1 = 2*self.alpha/math.sqrt(math.pi)
                 expfactor = torch.exp(-alphar**2)
                 b1 = (b0 + temp1*expfactor)*r**-2
-                potential += (dipoles.unsqueeze(0)*delta).sum(axis=2, keepdim=True)*b1
+                potential += (dipoles2.unsqueeze(0)*delta).sum(axis=2, keepdim=True)*b1
             potential = torch.where((r > 0)*(r < self.cutoff), potential, 0)
             potential = potential.sum(dim=1).squeeze(1)
         else:
@@ -256,7 +288,17 @@ class CoulombEwald(torch.nn.Module):
             a Tensor of shape (n_points, 3) containing the electric field at each of the points
         """
         if include_direct:
-            delta = periodic_displacements(field_positions.view((-1,1,3))-positions, box_vectors)
+            if self.use_supercell:
+                positions2, box_vectors2, particles, offsets = create_supercell(positions, box_vectors, self.cutoff)
+                charges2 = charges[particles]
+                if self.max_multipole != 'charge':
+                    dipoles2 = dipoles[particles]
+            else:
+                positions2 = positions
+                box_vectors2 = box_vectors
+                charges2 = charges
+                dipoles2 = dipoles
+            delta = periodic_displacements(field_positions.view((-1,1,3))-positions2, box_vectors2)
             r = torch.linalg.vector_norm(delta, dim=2, keepdim=True)
             temp1 = 2*self.alpha/math.sqrt(math.pi)
             temp2 = 4*self.alpha**3/math.sqrt(math.pi)
@@ -266,9 +308,9 @@ class CoulombEwald(torch.nn.Module):
             b0 = torch.erfc(alphar)/r
             b1 = rinv2*(b0 + temp1*expfactor)
             b2 = rinv2*(3*b1 + temp2*expfactor)
-            field = charges.unsqueeze(1)*delta*b1
+            field = charges2.unsqueeze(1)*delta*b1
             if self.max_multipole != 'charge':
-                field += -b1*dipoles + b2*(dipoles.unsqueeze(0)*delta).sum(axis=2, keepdim=True)*delta
+                field += -b1*dipoles2 + b2*(dipoles2.unsqueeze(0)*delta).sum(axis=2, keepdim=True)*delta
             field = torch.where((r > 0)*(r < self.cutoff), field, 0)
             field = field.sum(dim=1)
         else:

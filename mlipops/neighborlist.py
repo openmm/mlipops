@@ -16,9 +16,14 @@ class NeighborList(torch.nn.Module):
     periodic boundary conditions into account, can interact and therefore are returned.  It is also possible to
     omit the cutoff, in which case all pairs are returned regardless of distance.
 
-    Two additional options further restrict the result.  `include_self` determines whether a self interaction pair
+    A few additional options further restrict the result.  `include_self` determines whether a self interaction pair
     (i, i) should be included for each particle.  `include_symmetric` whether the result should include both of the
     symmetric pairs (i, j) and (j, i), or whether only one should be included.
+
+    Another option is to specify a subset of particles.  Pairs will only be returned if the *first* particle in the pair
+    is in the subset.  This is useful, for example, when modelling the interaction of a molecule with its environment.
+    The neighbor list includes interactions between the molecule's own particles, and interactions between the molecule
+    and the environment, but not interactions that only involve the environment.
 
     You can optionally specify a padding value, in which case all pairs that are within the distance cutoff+padding
     are returned.  This allows saving computation be reusing cached results.  If you call the neighbor list again
@@ -65,6 +70,7 @@ class NeighborList(torch.nn.Module):
         self._prev_positions = None
         self._prev_box_vectors = None
         self._prev_batch = None
+        self._prev_subset = None
 
     @property
     def cutoff(self):
@@ -82,7 +88,8 @@ class NeighborList(torch.nn.Module):
     def padding(self):
         return self._padding
 
-    def forward(self, positions: torch.Tensor, box_vectors: torch.Tensor | None = None, batch: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(self, positions: torch.Tensor, box_vectors: torch.Tensor | None = None,
+                batch: torch.Tensor | None = None, subset: torch.Tensor | None = None) -> torch.Tensor:
         """Compute the neighbor list.
 
         Parameters
@@ -97,6 +104,9 @@ class NeighborList(torch.nn.Module):
             a Tensor of shape (particles,) containing the index of the system each particle belongs to.  This must be
             sorted in ascending order, and every system must contain at least one particle.  If None, the neighbor list
             is computed for a single system instead of a batch of systems.
+        subset: torch.Tensor | None
+            a 1D Tensor containing the indices of particles to which the neighbor list should be restricted.  Each pair
+            will be returned only if the first of the two particles is in the subset.
 
         Returns
         -------
@@ -105,20 +115,22 @@ class NeighborList(torch.nn.Module):
         """
         if self._cutoff is None and batch is None:
             # Since we're returning all possible pairs, it mostly doesn't change from one call to the next.
-            # We can just return the same value every time.  The one thing we need to check for is that the
-            # number of particles hasn't changed.
+            # We can just return the same value every time.  We still need to check that the number of particles and the
+            # subset haven't changed.
 
             num_particles = positions.shape[0]
-            if self._prev_pairs is None or num_particles != self._prev_num_particles:
-                self._prev_pairs = self._compute_dense_pairs(num_particles, 0)
+            if self._prev_pairs is None or num_particles != self._prev_num_particles or subset is not self._prev_subset:
+                self._prev_pairs = self._compute_dense_pairs(num_particles, 0, subset)
                 self._prev_num_particles = num_particles
+                self._prev_subset = subset
             self._prev_batch = batch
             return self._prev_pairs
 
         # See if we have cached neighbors that are still valid.
 
-        if self._prev_pairs is not None and self._prev_batch is batch and ((self._prev_box_vectors is box_vectors) or
-                     (self._prev_box_vectors is not None and box_vectors is not None and box_vectors.equal(self._prev_box_vectors))):
+        if self._prev_pairs is not None and self._prev_batch is batch and self._prev_subset is subset and \
+                ((self._prev_box_vectors is box_vectors) or
+                 (self._prev_box_vectors is not None and box_vectors is not None and box_vectors.equal(self._prev_box_vectors))):
             if positions is self._prev_positions:
                 # The positions are exactly the same as before.
 
@@ -138,19 +150,19 @@ class NeighborList(torch.nn.Module):
             cutoff += self._padding
         if batch is None:
             if self.use_triton and positions.shape[0] > 1000:
-                result = self._compute_large_single(positions, box_vectors, cutoff)
+                result = self._compute_large_single(positions, box_vectors, cutoff, subset)
                 if result is None:
                     # Try again with a larger output buffer.
 
-                    result = self._compute_large_single(positions, box_vectors, cutoff)
+                    result = self._compute_large_single(positions, box_vectors, cutoff, subset)
             else:
-                result = self._compute_small_single(positions, box_vectors, cutoff)
+                result = self._compute_small_single(positions, box_vectors, cutoff, subset)
         else:
-            result = self._compute_small_batch(positions, box_vectors, cutoff, batch)
+            result = self._compute_small_batch(positions, box_vectors, cutoff, batch, subset)
             if result is None:
                 # Try again with a larger output buffer.
 
-                result = self._compute_small_batch(positions, box_vectors, cutoff, batch)
+                result = self._compute_small_batch(positions, box_vectors, cutoff, batch, subset)
 
         # Cache the result for future use.
 
@@ -158,52 +170,79 @@ class NeighborList(torch.nn.Module):
         self._prev_box_vectors = box_vectors
         self._prev_pairs = result
         self._prev_batch = batch
+        self._prev_subset = subset
         return result
 
-    def _compute_dense_pairs(self, num_particles: int | torch.Tensor, start_index: int | torch.Tensor) -> torch.Tensor:
+    def _compute_dense_pairs(self, num_particles: int | torch.Tensor, start_index: int | torch.Tensor, subset: torch.Tensor | None) -> torch.Tensor:
         """Build a list of the full set of all possible pairs between a set of particles.
         """
         i = torch.arange(start_index, num_particles+start_index, device=self.device)
         if self._include_self:
             if self._include_symmetric:
-                return torch.cartesian_prod(i, i)
+                return torch.cartesian_prod(i, i) if subset is None else torch.cartesian_prod(subset, i)
             else:
-                return torch.combinations(i, with_replacement=True)
-        else:
+                return self._filter_subset(torch.combinations(i, with_replacement=True), subset, num_particles)
+        elif subset is None:
             if self._include_symmetric:
                 pairs = torch.combinations(i)
-                return torch.cat([pairs, pairs.flip(1)])
+                return self._filter_subset(torch.cat([pairs, pairs.flip(1)]), subset, num_particles)
             else:
-                return torch.combinations(i)
+                return self._filter_subset(torch.combinations(i), subset, num_particles)
 
-    def _compute_small_single(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float) -> torch.Tensor:
+    def _compute_small_single(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float, subset: torch.Tensor | None) -> torch.Tensor:
         """This implements a brute force algorithm to identify neighbors by testing all possible pairs.  It is
         fast for small numbers of particles but scales as O(n^2), making it less suitable for larger systems.
         """
-        # Build matrices of deltas and distances.
-
-        delta = periodic_displacements(positions.view((-1,1,3)) - positions, box_vectors)
-        distance = torch.linalg.vector_norm(delta, dim=2)
-
-        # Create a mask for which pairs to return.
-
-        mask = distance < cutoff
-        if not self._include_symmetric:
-            if self._include_self:
-                mask = mask.triu()
-            else:
-                mask = mask.triu(1)
-        elif not self._include_self:
-            mask.fill_diagonal_(False)
-
-        # Build a matrix of indices and return the results.
-
         n = positions.shape[0]
         i = torch.arange(n, device=self.device)
-        indices = torch.cat((i.view((-1, 1, 1)).expand((n, n, 1)), i.view((1, -1, 1)).expand((n, n, 1))), axis=2)
-        return indices[mask]
+        if subset is None:
+            # Build matrices of deltas and distances.
 
-    def _compute_large_single(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float) -> torch.Tensor | None:
+            delta = periodic_displacements(positions.view((-1,1,3)) - positions, box_vectors)
+            distance = torch.linalg.vector_norm(delta, dim=2)
+
+            # Create a mask for which pairs to return.
+
+            mask = distance < cutoff
+            if not self._include_symmetric:
+                if self._include_self:
+                    mask = mask.triu()
+                else:
+                    mask = mask.triu(1)
+            elif not self._include_self:
+                mask.fill_diagonal_(False)
+
+            # Build a matrix of indices and return the results.
+
+            indices = torch.cat((i.view((-1, 1, 1)).expand((n, n, 1)), i.view((1, -1, 1)).expand((n, n, 1))), axis=2)
+            return indices[mask]
+        else:
+            # Build matrices of deltas and distances.
+
+            delta = periodic_displacements(positions[subset].view((-1,1,3)) - positions, box_vectors)
+            distance = torch.linalg.vector_norm(delta, dim=2)
+
+            # Create a mask for which pairs to return.
+
+            in_subset = torch.zeros(n, dtype=torch.bool, device=subset.device)
+            in_subset[subset] = True
+            mask = distance < cutoff
+            j = subset.unsqueeze(1)
+            if not self._include_symmetric:
+                if self._include_self:
+                    mask &= (j<=i) | ~in_subset[i]
+                else:
+                    mask &= (j<i) | ~in_subset[i]
+            elif not self._include_self:
+                mask &= (i != j)
+
+            # Build a matrix of indices and return the results.
+
+            m = subset.shape[0]
+            indices = torch.cat((subset.view((-1, 1, 1)).expand((m, n, 1)), i.view((1, -1, 1)).expand((m, n, 1))), axis=2)
+            return indices[mask]
+
+    def _compute_large_single(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float, subset: torch.Tensor | None) -> torch.Tensor | None:
         """This implements a more complex algorithm for identifying neighbors.  On small systems it is slower than
         _compute_small(), but it becomes much faster as the number of particles grows.  It requires Triton, and
         therefore is only used on GPUs.
@@ -214,8 +253,13 @@ class NeighborList(torch.nn.Module):
         bin_size = 0.2*cutoff
         grid_size = ((positions.max(dim=0)[0]-positions.min(dim=0)[0])/bin_size).ceil().to(torch.int32)+3
         keys = torch.empty((num_particles,), dtype=torch.int32, device=self.device)
+        if subset is None:
+            in_subset = None
+        else:
+            in_subset = torch.zeros(num_particles, dtype=torch.bool, device=self.device)
+            in_subset[subset] = True
         g = lambda meta: (triton.cdiv(num_particles, meta['BLOCK_SIZE']),)
-        find_sort_keys_kernel[g](keys, positions, grid_size, bin_size, num_particles, 256)
+        find_sort_keys_kernel[g](keys, positions, grid_size, in_subset, bin_size, num_particles, 256)
         order = keys.sort()[1]
         sorted_positions = positions[order]
 
@@ -261,10 +305,10 @@ class NeighborList(torch.nn.Module):
             self._max_neighbors = int(1.1*output_counter)
             return None
         output = output.narrow(0, 0, output_counter)
-        return output
+        return self._filter_subset(output, subset, num_particles)
 
     def _compute_small_batch(self, positions: torch.Tensor, box_vectors: torch.Tensor | None, cutoff: float | None,
-                             batch: torch.Tensor) -> torch.Tensor | None:
+                             batch: torch.Tensor, subset: torch.Tensor | None) -> torch.Tensor | None:
         """This implements a brute force algorithm to identify neighbors by testing all possible pairs within each
         system.  It is fast for small numbers of particles but scales as O(n^2), making it less suitable for larger
         systems.
@@ -280,13 +324,19 @@ class NeighborList(torch.nn.Module):
 
         if self.use_triton:
             cutoff2 = None if cutoff is None else cutoff**2
-            mean_particles = positions.shape[0]/num_systems
+            num_particles = positions.shape[0]
+            mean_particles = num_particles/num_systems
             block_size = 256
             programs_per_system = int(math.ceil(0.5*mean_particles*mean_particles/block_size))
             output = torch.empty((self._max_neighbors, 2), dtype=torch.int32, device=self.device)
             output_counter = torch.zeros((1,), dtype=torch.int32, device=self.device)
+            if subset is None:
+                in_subset = None
+            else:
+                in_subset = torch.zeros(num_particles, dtype=torch.bool, device=self.device)
+                in_subset[subset] = True
             g = lambda meta: (programs_per_system*num_systems,)
-            small_batch_kernel[g](output, output_counter, start_index, system_particles, positions, box_vectors,
+            small_batch_kernel[g](output, output_counter, start_index, system_particles, positions, box_vectors, in_subset,
                                   cutoff2, self._include_self, self._include_symmetric, num_systems, self._max_neighbors,
                                   programs_per_system, block_size)
             if output_counter > self._max_neighbors:
@@ -295,15 +345,29 @@ class NeighborList(torch.nn.Module):
 
                 self._max_neighbors = int(1.1*output_counter)
                 return None
-            output = output.narrow(0, 0, output_counter)
-            return output
+            return output.narrow(0, 0, output_counter)
 
         # Build a list of all possible pairs.
 
         system_pairs = []
-        for i in range(num_systems):
-            system_pairs.append(self._compute_dense_pairs(system_particles[i], start_index[i]))
-        all_pairs = torch.cat(system_pairs)
+        if subset is None:
+            for i in range(num_systems):
+                system_pairs.append(self._compute_dense_pairs(system_particles[i], start_index[i], None))
+            all_pairs = torch.cat(system_pairs)
+        else:
+            for s in range(num_systems):
+                i = torch.arange(start_index[s], system_particles[s]+start_index[s], device=self.device)
+                system_pairs.append(torch.cartesian_prod(i, i))
+            all_pairs = self._filter_subset(torch.cat(system_pairs), subset, positions.shape[0])
+            if not self._include_symmetric:
+                in_subset = torch.zeros(positions.shape[0], dtype=torch.bool, device=subset.device)
+                in_subset[subset] = True
+                if self._include_self:
+                    all_pairs = all_pairs[(all_pairs[:,0]<=all_pairs[:,1]) | ~in_subset[all_pairs[:,1]]]
+                else:
+                    all_pairs = all_pairs[(all_pairs[:,0]<all_pairs[:,1]) | ~in_subset[all_pairs[:,1]]]
+            elif not self._include_self:
+                all_pairs = all_pairs[all_pairs[:,0] != all_pairs[:,1]]
         if cutoff is None:
             return all_pairs
 
@@ -312,3 +376,11 @@ class NeighborList(torch.nn.Module):
         delta = batch_pairwise_displacements(positions, all_pairs, batch, box_vectors)
         distance = torch.linalg.vector_norm(delta, dim=1)
         return all_pairs[distance < cutoff]
+
+    def _filter_subset(self, pairs: torch.Tensor, subset: torch.Tensor | None, num_particles: int) -> torch.Tensor:
+        """Filter a list of pairs to remove ones fully outside a specified subset."""
+        if subset is None:
+            return pairs
+        in_subset = torch.zeros(num_particles, dtype=torch.bool, device=pairs.device)
+        in_subset[subset] = True
+        return pairs[in_subset[pairs[:,0]]]
