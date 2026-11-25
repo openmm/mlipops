@@ -203,7 +203,7 @@ def batch_create_supercell(positions: torch.Tensor, box_vectors: torch.Tensor, c
     ----------
     positions: torch.Tensor
         a Tensor of shape (n_points, 3) containing the Cartesian coordinates of each point in the unit cell
-    box_vectors: torch.Tensor | None
+    box_vectors: torch.Tensor
         a Tensor of shape (n_systems, 3, 3) containing box vectors defining the periodic box for each system
     cutoff: float
         the cutoff distance
@@ -226,23 +226,47 @@ def batch_create_supercell(positions: torch.Tensor, box_vectors: torch.Tensor, c
     torch.Tensor:
         a Tensor of shape (n_new_points,) containing the index of the system each point in the supercell belongs to
     """
-    split_locations = torch.nonzero(batch[1:] != batch[:-1]).flatten()+1
-    batch_positions = torch.tensor_split(positions, split_locations.cpu())
-    new_positions = []
-    new_box_vectors = []
-    particle = []
-    offset = []
-    new_batch = []
-    start_index = 0
-    for i in range(len(batch_positions)):
-        batch_new_positions, batch_new_box_vectors, batch_particle, batch_offset = create_supercell(batch_positions[i], box_vectors[i], cutoff)
-        new_positions.append(batch_new_positions)
-        new_box_vectors.append(batch_new_box_vectors)
-        particle.append(batch_particle+start_index)
-        offset.append(batch_offset)
-        new_batch.append(i*torch.ones(batch_new_positions.size()[0], dtype=torch.int32, device=batch.device))
-        start_index += batch_positions[i].shape[0]
-    return torch.cat(new_positions), torch.stack(new_box_vectors), torch.cat(particle), torch.cat(offset), torch.cat(new_batch)
+    num_systems = box_vectors.shape[0]
+    device = batch.device
+
+    # Determine how many unit cells to tile for each batch.
+
+    batch_copies = (2*cutoff/box_vectors.diagonal(dim1=1, dim2=2)).ceil().to(torch.int32)
+    batch_total_copies = batch_copies.prod(dim=-1)
+
+    # Determine how many points are in each system, both for the unit cell and the supercell.
+
+    batch_point_cum_sum = torch.empty(num_systems, dtype=torch.int32, device=device)
+    batch_point_cum_sum[:-1] = torch.nonzero(batch[1:] != batch[:-1]).flatten()+1
+    batch_point_cum_sum[-1] = batch.shape[0]
+    padded = torch.nn.functional.pad(batch_point_cum_sum, (1, 0))
+    batch_point_count = padded[1:] - padded[:-1]
+    sc_batch_point_count = batch_total_copies*batch_point_count
+    sc_batch_point_cum_sum = torch.cumsum(sc_batch_point_count, dim=0)
+
+    # For each point, identify the index of its system and its index within the system.
+
+    cpu_count = sc_batch_point_count.cpu()
+    sc_batch = torch.cat(tuple(i*torch.ones(cpu_count[i], dtype=torch.int32, device=device) for i in range(num_systems)))
+    sc_index = torch.arange(sc_batch.shape[0], device=device) - (sc_batch_point_cum_sum-sc_batch_point_count)[sc_batch]
+
+    # Find the offset for each point.
+
+    sc_batch_point_count = batch_point_count[sc_batch]
+    sc_batch_copies = batch_copies[sc_batch]
+    batch_start = batch_point_cum_sum-batch_point_count
+    sc_point = sc_index%sc_batch_point_count + batch_start[sc_batch]
+    sc_unit_cell = sc_index // sc_batch_point_count
+    offset_x = sc_unit_cell // (sc_batch_copies[:,1]*sc_batch_copies[:,2])
+    offset_y = (sc_unit_cell - offset_x*sc_batch_copies[:,1]*sc_batch_copies[:,2]) // sc_batch_copies[:,2]
+    offset_z = sc_unit_cell % sc_batch_copies[:,2]
+    sc_offset = torch.stack([offset_x, offset_y, offset_z]).T.to(positions.dtype)
+
+    # Create the supercell.
+
+    sc_box_vectors = batch_copies.unsqueeze(2)*box_vectors
+    sc_positions = positions[sc_point] + (sc_offset.unsqueeze(1)@box_vectors[sc_batch]).squeeze(1)
+    return sc_positions, sc_box_vectors, sc_point, sc_offset, sc_batch
 
 
 def compute_supercell_neighbors(neighbor_list: "NeighborList", positions: torch.Tensor,
